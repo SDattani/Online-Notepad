@@ -4,6 +4,7 @@ const bcrypt = require('bcrypt');
 const validator = require('validator');
 const User = require('../models/user');
 const { validateSignupData } = require('../utils/validation');
+const { UserAuth } = require('../middleware/Auth');
 /**
  * @swagger
  * /signup:
@@ -123,7 +124,7 @@ authRouter.post('/login', async (req,res) => {
  *         description: Logged out successfully
  */
 
-authRouter.post('/logout', async (req,res) => {
+authRouter.post('/logout',UserAuth, async (req,res) => {
     res.cookie('token', null, { expires: new Date(Date.now()) })
        .send('User Logged Out Successfully!!');
 });
