@@ -1,7 +1,6 @@
 const express = require('express');
 const noteRouter = express.Router();
 const Note = require('../models/note');
-const mongoose = require('mongoose');
 
 const { UserAuth } = require('../middleware/Auth');
 
@@ -37,26 +36,27 @@ const { UserAuth } = require('../middleware/Auth');
 
 noteRouter.post('/notes', UserAuth, async (req, res) => {
     try {
-        // console.log('req.user:', req.user); // add this
-        // console.log('req.cookies:', req.cookies);
         const { title, content } = req.body;
-        if (!title) {
-            return res.status(400).send('Title is required !!');
+
+        if (!title || title.trim() === '') {
+            return res.status(400).send('Title is required');
+        }
+        if (title.length > 200) {
+            return res.status(400).send('Title cannot exceed 200 characters');
+        }
+        if (content && content.length > 50000) {
+            return res.status(400).send('Content cannot exceed 50000 characters');
         }
 
-        const note = new Note({
-            title,
+        const note = await Note.create({
+            title: title.trim(),
             content,
-            userId: req.user._id,
+            userId: req.user.id,   // MySQL uses id not _id
         });
-
-        await note.save();
-
-        res.json(note);
+        res.status(201).json(note);
+    } catch (err) {
+        res.status(500).send('Error creating note: ' + err.message);
     }
-    catch (err) {
-        res.status(500).send('Error While creating notes : ' + err.message);
-    };
 });
 
 /**
@@ -74,10 +74,7 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
 
 noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
     try {
-        const notes = await Note.findOne({
-            _id: req.params.id,
-            userId: req.user._id,
-        });
+        const note = await Note.findOne(req.params.id, req.user.id);
         if (!notes) {
             return res.status(404).send("Note not found");
         }
@@ -149,7 +146,7 @@ noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
 
 noteRouter.get('/notes', UserAuth, async (req, res) => {
     try {
-        const notes = await Note.find({ userId: req.user._id }).sort({ updatedAt: -1 });
+        const notes = await Note.findAllByUser(req.user.id);
         res.json(notes);
     }
     catch (err) {
@@ -160,38 +157,18 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
 noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
     try {
         const { id } = req.params;
-
-        if (!id) {
-            return res.status(400).send('Note Id Required!!');
-        }
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).send('Invalid Note Id')
-        }
-
         const { title, content } = req.body;
 
         const updates = {};
-        if (title !== undefined) {
-            updates.title = title;
-        }
-        if (content !== undefined) {
-            updates.content = content;
-        }
+        if (title !== undefined) updates.title = title;
+        if (content !== undefined) updates.content = content;
 
         if (Object.keys(updates).length === 0) {
-            return res.status(400).send('No Fields providedto update')
+            return res.status(400).send('No fields provided to update');
         }
 
-        const note = await Note.findOneAndUpdate(
-            { _id: id, userId: req.user._id },
-            updates,
-            { new: true, runValidators: true }
-        );
-
-        if (!note) {
-            return res.status(404).send('Note not found');
-        }
+        const note = await Note.update(id, req.user.id, updates);
+        if (!note) return res.status(404).send('Note not found');
         res.json(note);
     }
     catch (err) {
@@ -201,23 +178,8 @@ noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
 
 noteRouter.delete('/notes/:id', UserAuth, async (req, res) => {
     try {
-        const { id } = req.params;
-
-        if (!id) {
-            return res.status(400).send('Note Id Required!!');
-        }
-
-        if (!mongoose.Types.ObjectId.isValid(id)) {
-            return res.status(400).send('Invalid Note Id')
-        }
-
-        const note = await Note.findOneAndDelete({
-            _id : req.params.id,
-            userId : req.user._id,
-        });
-        if (!note) {
-            return res.status(404).send('Note not found');
-        }
+        const deleted = await Note.delete(req.params.id, req.user.id);
+        if (!deleted) return res.status(404).send('Note not found');
         res.send('Note deleted successfully');
     }
     catch (err) {

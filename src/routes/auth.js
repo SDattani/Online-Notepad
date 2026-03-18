@@ -1,11 +1,9 @@
 const express = require('express');
 const authRouter = express.Router();
-
-const { validateSignupData } = require('../utils/validation');
-const User = require("../models/user");
 const bcrypt = require('bcrypt');
 const validator = require('validator');
-
+const User = require('../models/user');
+const { validateSignupData } = require('../utils/validation');
 /**
  * @swagger
  * /signup:
@@ -38,27 +36,23 @@ const validator = require('validator');
  *       400:
  *         description: Validation error
  */
+
 authRouter.post('/signup', async (req,res) => {
-    try{
+    try {
         validateSignupData(req);
+        const { firstName, lastName, emailId, password } = req.body;
 
-        const { firstName , lastName , emailId, password } = req.body;
+        const existingUser = await User.findByEmail(emailId);
+        if (existingUser) {
+            return res.status(400).send('Email already registered');
+        }
 
-        const passwordHash = await bcrypt.hash(password,10);
-
-        const newUser = new User({
-            firstName,
-            lastName,
-            emailId,
-            password : passwordHash,
-        });
-
-        await newUser.save();
+        const passwordHash = await bcrypt.hash(password, 10);
+        await User.create({ firstName, lastName, emailId, password: passwordHash });
         res.send('User Signed up Successfully');
+    } catch (err) {
+        res.status(400).send('Error signing up user: ' + err.message);
     }
-    catch (err) {
-        res.status(400).send('Error signing up user :'+ err.message);
-    };
 });
 
 /**
@@ -89,33 +83,30 @@ authRouter.post('/signup', async (req,res) => {
  */
 
 authRouter.post('/login', async (req,res) => {
-    try{
-        const { emailId , password} = req.body;
+    try {
+        const { emailId, password } = req.body;
 
-        if(!emailId || !validator.isEmail(emailId)){
-            throw new Error('Enter an EmailId');
-        };
-
-        const user = await User.findOne({ emailId });
-        if (!user){
-            return res.status(404).send('invalid Credential');
-        };
-
-        const isPasswordValid = await user.validatePassword(password);
-
-        if (isPasswordValid) {
-            const token = await user.jwt();
-            res.cookie('token', token, {
-                expires: new Date(Date.now() + 604800 * 1000),
-            });
-            res.send('User Login Successfully !!');
+        if (!emailId || !validator.isEmail(emailId)) {
+            throw new Error('Enter a valid EmailId');
         }
-        else{
-            res.status(401).send('Invalid Credntial');
+
+        const user = await User.findByEmail(emailId);
+        if (!user) {
+            return res.status(404).send('Invalid Credentials');
         }
-    }
-    catch(err){
-        res.status(500).send('Error in Logging User' + err.message);
+
+        const isPasswordValid = await User.validatePassword(password, user.password);
+        if (!isPasswordValid) {
+            return res.status(401).send('Invalid Credentials');
+        }
+
+        const token = User.generateToken(user);
+        res.cookie('token', token, {
+            expires: new Date(Date.now() + 604800 * 1000),
+        });
+        res.send('User Login Successfully!!');
+    } catch (err) {
+        res.status(500).send('Error logging in: ' + err.message);
     }
 });
 
@@ -133,9 +124,9 @@ authRouter.post('/login', async (req,res) => {
  */
 
 authRouter.post('/logout', async (req,res) => {
-    res
-        .cookie('token', null , {expires : new Date(Date.now()) })
-        .send('User Logged Out Successfully !!');
+    res.cookie('token', null, { expires: new Date(Date.now()) })
+       .send('User Logged Out Successfully!!');
 });
+
 
 module.exports = authRouter;

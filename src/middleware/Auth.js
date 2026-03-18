@@ -13,9 +13,8 @@ const UserAuth = async (req, res, next) => {
         } catch (err) {
             return res.status(401).send('Unauthorized'); // token invalid or expired
         }
-        const { _id } = decoded;
 
-        const user = await User.findById(_id);
+        const user = await User.findById(decoded._id);
         if(!user) {
             return res.status(404).send('User Not Found');
         };
