@@ -74,7 +74,7 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
 
 noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
     try {
-        const note = await Note.findOne(req.params.id, req.user.id);
+        const notes = await Note.findOne(req.params.id, req.user.id);
         if (!notes) {
             return res.status(404).send("Note not found");
         }

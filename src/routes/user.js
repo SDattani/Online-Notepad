@@ -1,6 +1,7 @@
 const express = require('express');
 const userRouter = express.Router();
 const bcrypt = require('bcrypt');
+const { getDB } = require("../config/database")
 
 const { UserAuth } = require('../middleware/Auth');
 const User = require('../models/user')
@@ -20,14 +21,19 @@ const User = require('../models/user')
 
 userRouter.get("/user/view", UserAuth, async (req, res) =>{
     try {
-        const loggedInUser = req.user;
-        const findUser = await User.findOne({
-            _id : loggedInUser._id
-        }).select("firstName lastName");
-        res.send(findUser);
-    }
-    catch (err) {
-        res.status(500).send('Error in fetching User profile ')
+        const db = getDB();
+        const [rows] = await db.execute(
+            'SELECT firstName, lastName FROM users WHERE id = ?',
+            [req.user.id]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).send('User not found');
+        }
+
+        res.json(rows[0]);
+    } catch (err) {
+        res.status(500).send('Error fetching user profile: ' + err.message);
     }
 });
 
@@ -61,18 +67,22 @@ userRouter.get("/user/view", UserAuth, async (req, res) =>{
 userRouter.patch("/user/password", UserAuth, async (req, res) => {
     try{
         const { oldPassword, newPassword } = req.body;
-        const loggedInUser = req.user;
-        const isOldPasswordValid = await loggedInUser.validatePassword(oldPassword);
+
+        if (!oldPassword || !newPassword) {
+            return res.status(400).send('Old password and new password are required');
+        }
+        // const loggedInUser = req.user;
+        const isOldPasswordValid = await User.validatePassword(oldPassword, req.user.password);
         if (!isOldPasswordValid) {
             return res.status(401).send('Invalid Old Password');
         }
-        loggedInUser.password = newPassword;
-        loggedInUser.password = await bcrypt.hash(newPassword, 10);
-        await loggedInUser.save();
-        res.send(`${loggedInUser.firstName} your Password is Updated successfully!`);
-    }
-    catch(err){
-        res.status(500).send('Error while updating user password : '+ err.message);
+        const newPasswordHash = await bcrypt.hash(newPassword, 10);
+
+        await User.updatePassword(req.user.id, newPasswordHash);
+
+        res.send(`${req.user.firstName} your password is updated successfully!`);
+    } catch (err) {
+        res.status(500).send('Error while updating user password: ' + err.message);
     }
 });
 
