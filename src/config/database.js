@@ -1,9 +1,12 @@
 const mongoose = require('mongoose');
 
 const connectDB = async() => {
-    mongoose.connect(
-    'mongodb+srv://Sahil:Sah%232003@cluster0.nlsznyh.mongodb.net/onlinenotepad'
-    );
+    const uri = process.env.MONGO_URI;
+    if (!uri) {
+        throw new Error('MONGO_URI is not defined in .env file');
+    }
+
+    await mongoose.connect(uri);
 };
 
 module.exports = { connectDB };

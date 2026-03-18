@@ -5,6 +5,36 @@ const mongoose = require('mongoose');
 
 const { UserAuth } = require('../middleware/Auth');
 
+/**
+ * @swagger
+ * /notes:
+ *   post:
+ *     summary: Create a new note
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [title]
+ *             properties:
+ *               title:
+ *                 type: string
+ *                 example: My First Note
+ *               content:
+ *                 type: string
+ *                 example: Hello world
+ *     responses:
+ *       200:
+ *         description: Note created
+ *       401:
+ *         description: Unauthorized
+ */
+
+
 noteRouter.post('/notes', UserAuth, async (req, res) => {
     try {
         // console.log('req.user:', req.user); // add this
@@ -29,6 +59,19 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
     };
 });
 
+/**
+ * @swagger
+ * /notes:
+ *   get:
+ *     summary: Get all notes for logged-in user
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: List of notes
+ */
+
 noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
     try {
         const notes = await Note.findOne({
@@ -44,6 +87,65 @@ noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
         res.status(400).send('Error fetching notes : ' + err.message);
     };
 });
+
+/**
+ * @swagger
+ * /notes/{id}:
+ *   get:
+ *     summary: Get a note by ID
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Note found
+ *       404:
+ *         description: Note not found
+ *   patch:
+ *     summary: Update a note
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Note updated
+ *   delete:
+ *     summary: Delete a note
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Note deleted
+ */
 
 noteRouter.get('/notes', UserAuth, async (req, res) => {
     try {

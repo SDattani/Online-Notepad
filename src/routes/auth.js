@@ -6,6 +6,38 @@ const User = require("../models/user");
 const bcrypt = require('bcrypt');
 const validator = require('validator');
 
+/**
+ * @swagger
+ * /signup:
+ *   post:
+ *     summary: Register a new user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [firstName, lastName, emailId, password]
+ *             properties:
+ *               firstName:
+ *                 type: string
+ *                 example: Sahil
+ *               lastName:
+ *                 type: string
+ *                 example: Dattani
+ *               emailId:
+ *                 type: string
+ *                 example: sahil@gmail.com
+ *               password:
+ *                 type: string
+ *                 example: Sah#2003
+ *     responses:
+ *       200:
+ *         description: User signed up successfully
+ *       400:
+ *         description: Validation error
+ */
 authRouter.post('/signup', async (req,res) => {
     try{
         validateSignupData(req);
@@ -28,6 +60,33 @@ authRouter.post('/signup', async (req,res) => {
         res.status(400).send('Error signing up user :'+ err.message);
     };
 });
+
+/**
+ * @swagger
+ * /login:
+ *   post:
+ *     summary: Login user
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [emailId, password]
+ *             properties:
+ *               emailId:
+ *                 type: string
+ *                 example: sahil@gmail.com
+ *               password:
+ *                 type: string
+ *                 example: Sah#2003
+ *     responses:
+ *       200:
+ *         description: Login successful, sets cookie
+ *       401:
+ *         description: Invalid credentials
+ */
 
 authRouter.post('/login', async (req,res) => {
     try{
@@ -59,6 +118,19 @@ authRouter.post('/login', async (req,res) => {
         res.status(500).send('Error in Logging User' + err.message);
     }
 });
+
+/**
+ * @swagger
+ * /logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ */
 
 authRouter.post('/logout', async (req,res) => {
     res
