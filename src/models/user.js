@@ -59,7 +59,7 @@ const User = {
     findByEmail: async (emailId) => {
         const db = getDB();
         const [rows] = await db.execute(
-            'SELECT * FROM users WHERE emailId = ?', [emailId]
+            'SELECT * FROM users WHERE emailId = ?', [emailId.toLowerCase()]
         );
         return rows[0] || null;
     },
@@ -78,7 +78,7 @@ const User = {
         const db = getDB();
         const [result] = await db.execute(
             'INSERT INTO users (firstName, lastName, emailId, password) VALUES (?, ?, ?, ?)',
-            [firstName, lastName, emailId, password]
+            [firstName, lastName, emailId.toLowerCase(), password]
         );
         return { id: result.insertId, firstName, lastName, emailId };
     },

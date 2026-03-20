@@ -85,7 +85,8 @@ authRouter.post('/signup', async (req,res) => {
 
 authRouter.post('/login', async (req,res) => {
     try {
-        const { emailId, password } = req.body;
+        const { password } = req.body;
+        const emailId = req.body.emailId?.toLowerCase();
 
         if (!emailId || !validator.isEmail(emailId)) {
             throw new Error('Enter a valid EmailId');

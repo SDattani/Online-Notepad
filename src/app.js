@@ -8,6 +8,7 @@ const cookieParser = require('cookie-parser');
 const authRouter = require('./routes/auth');
 const userRouter = require('./routes/user');
 const noteRouter = require('./routes/note');
+const sharedRouter = require('./routes/shared.js')
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
@@ -17,6 +18,7 @@ app.use(cookieParser());
 app.use('/', authRouter);
 app.use('/', userRouter);
 app.use('/', noteRouter);
+app.use('/', sharedRouter);
 
 connectDB().then(async () => {
     console.log('Connected to MongoDB successfully!');

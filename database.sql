@@ -23,3 +23,18 @@ CREATE TABLE IF NOT EXISTS notes (
     updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
 );
+
+-- Step 4: Create shared_notes table
+CREATE TABLE IF NOT EXISTS shared_notes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    noteId INT NOT NULL,
+    ownerId INT NOT NULL,
+    sharedWithUserId INT NOT NULL,
+    token VARCHAR(64) NOT NULL UNIQUE,
+    permission ENUM ('view' , 'edit') NOT NULL DEFAULT 'view' , 
+    isActive BOOLEAN DEFAULT TRUE,
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (noteId) REFERENCES notes(id) ON DELETE CASCADE,
+    FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (sharedWithUserId) REFERENCES users(id) ON DELETE CASCADE,
+);
