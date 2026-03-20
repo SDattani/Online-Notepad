@@ -1,16 +1,15 @@
-const { permission } = require("process");
 const { getDB } = require("../config/database");
 const crypto = require('crypto');
 
 const SharedNote = {
 
-    create: async ({ noteId, ownerId, shareWithUserId, permission }) => {
+    create: async ({ noteId, ownerId, sharedWithUserId, permission }) => {
         const db = getDB();
 
         const [existing] = await db.execute(
             `SELECT  * FROM shared_notes
             WHERE noteId = ? AND ownerId = ? AND sharedWithUserId = ? AND isActive = TRUE`,
-            [noteId, ownerId, shareWithUserId]
+            [noteId, ownerId, sharedWithUserId]
         );
 
         if (existing.length > 0) {
@@ -36,12 +35,12 @@ const SharedNote = {
     findByToken: async (token, accessingUserId) => {
         const db = getDB();
         const [rows] = await db.execute(
-            `SELECT shared_notes.* , notes.title, notes.content , user.userId
+            `SELECT shared_notes.* , notes.title, notes.content , notes.userId
             FROM shared_notes
             JOIN notes ON shared_notes.noteId = notes.id
             WHERE shared_notes.token = ?
             AND shared_notes.isActive = TRUE
-            AND shared_notes.shareWithUserId = ?`,
+            AND shared_notes.sharedWithUserId = ?`,
             [token, accessingUserId]
         );
         return rows[0] || null;
@@ -60,8 +59,8 @@ const SharedNote = {
     },
 
     findSharedWithMe: async (userId) => {
-        const db = getDB();
-        const [rows] = db.execute(
+        const db = await getDB();
+        const [rows] = await db.execute(
             `SELECT shared_notes.*, notes.title, notes.content,
              users.firstName AS ownerFirstName, users.lastName AS ownerLastName
              FROM shared_notes

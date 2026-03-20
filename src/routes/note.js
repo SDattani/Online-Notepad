@@ -1,6 +1,7 @@
 const express = require('express');
 const noteRouter = express.Router();
 const Note = require('../models/note');
+const SharedNote = require('../models/sharedNotes');
 
 const { getDB } = require('../config/database')
 
@@ -187,6 +188,83 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
     catch (err) {
         res.status(400).send('Error fetching notes : ' + err.message);
     };
+});
+
+/**                           
+ * @swagger
+ * /notes/shared-with-me:
+ *   get:
+ *     summary: Get all notes shared with the logged-in user
+ *     description: Returns all active notes shared with the logged-in user along with owner details and share links. Must be placed before /notes/{id} route.
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: List of notes shared with me
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   id:
+ *                     type: integer
+ *                     example: 1
+ *                   title:
+ *                     type: string
+ *                     example: Shopping List
+ *                   content:
+ *                     type: string
+ *                     example: Milk, Eggs, Bread
+ *                   permission:
+ *                     type: string
+ *                     enum: [view, edit]
+ *                     example: view
+ *                   token:
+ *                     type: string
+ *                     example: a1b2c3d4e5f6...
+ *                   shareLink:
+ *                     type: string
+ *                     example: http://localhost:3000/shared/a1b2c3...
+ *                   ownerFirstName:
+ *                     type: string
+ *                     example: Sahil
+ *                   ownerLastName:
+ *                     type: string
+ *                     example: Dattani
+ *                   noteId:
+ *                     type: integer
+ *                     example: 1
+ *                   ownerId:
+ *                     type: integer
+ *                     example: 1
+ *                   isActive:
+ *                     type: boolean
+ *                     example: true
+ *                   createdAt:
+ *                     type: string
+ *                     example: 2026-03-18T00:00:00.000Z
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Error fetching shared notes
+ */
+
+noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
+    try {
+        const notes = await SharedNote.findSharedWithMe(req.user.id);
+
+        const notesWithLinks = notes.map(note => ({
+            ...note,
+            shareLink: `${req.protocol}://${req.get('host')}/shared/${note.token}`,
+        }));
+
+        res.json(notesWithLinks);
+    } catch (err) {
+        res.status(500).send('Error fetching shared notes: ' + err.message);
+    }
 });
 
 /**
