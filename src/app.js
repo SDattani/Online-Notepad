@@ -21,10 +21,10 @@ app.use('/', noteRouter);
 app.use('/', sharedRouter);
 
 connectDB().then(async () => {
-    console.log('Connected to MongoDB successfully!');
+    console.log('Connected to Database successfully!');
     app.listen(3000, () =>{
         console.log('Server is Running on port 3000');
     });
 }).catch((err) => {
-    console.log('Error Connecting to MongoDB:', err);
+    console.log('Error Connecting to Database:', err);
 });

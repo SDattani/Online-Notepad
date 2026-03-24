@@ -4,7 +4,8 @@ const bcrypt = require('bcrypt');
 const { getDB } = require("../config/database")
 
 const { UserAuth } = require('../middleware/Auth');
-const User = require('../models/user')
+const User = require('../models/user');
+const { sendResponse } = require('../utils/response');
 
 /**
  * @swagger
@@ -16,10 +17,36 @@ const User = require('../models/user')
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Returns firstName and lastName
+ *         description: User profile fetched successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: User profile fetched successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     firstName:
+ *                       type: string
+ *                       example: Sahil
+ *                     lastName:
+ *                       type: string
+ *                       example: Dattani
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
  */
 
-userRouter.get("/user/view", UserAuth, async (req, res) =>{
+userRouter.get("/user/view", UserAuth, async (req, res) => {
     try {
         const db = getDB();
         const [rows] = await db.execute(
@@ -28,12 +55,24 @@ userRouter.get("/user/view", UserAuth, async (req, res) =>{
         );
 
         if (rows.length === 0) {
-            return res.status(404).send('User not found');
+            return sendResponse(res, {
+                status: 404,
+                message: 'User not found',
+                data: null,
+            });
         }
 
-        res.json(rows[0]);
+        return sendResponse(res, {
+            status: 200,
+            message: 'User profile fetched successfully',
+            data: rows[0],
+        });
     } catch (err) {
-        res.status(500).send('Error fetching user profile: ' + err.message);
+        return sendResponse(res, {
+            status: 500,
+            message: err.message,
+            data: null,
+        });
     }
 });
 
@@ -55,34 +94,190 @@ userRouter.get("/user/view", UserAuth, async (req, res) =>{
  *             properties:
  *               oldPassword:
  *                 type: string
+ *                 example: Sah#2003
  *               newPassword:
  *                 type: string
+ *                 example: Sah#2904
  *     responses:
  *       200:
- *         description: Password updated
+ *         description: Password updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Sahil your password updated successfully
+ *                 data:
+ *                   nullable: true
+ *                   example: null
+ *       400:
+ *         description: Old and new password are required
  *       401:
  *         description: Invalid old password
+ *       500:
+ *         description: Server error
  */
 
 userRouter.patch("/user/password", UserAuth, async (req, res) => {
-    try{
+    try {
         const { oldPassword, newPassword } = req.body;
 
         if (!oldPassword || !newPassword) {
-            return res.status(400).send('Old password and new password are required');
+            return sendResponse(res, {
+                status: 400,
+                message: 'Old password and new password are required',
+                data: null,
+            });
         }
-        // const loggedInUser = req.user;
+
         const isOldPasswordValid = await User.validatePassword(oldPassword, req.user.password);
         if (!isOldPasswordValid) {
-            return res.status(401).send('Invalid Old Password');
+            return sendResponse(res, {
+                status: 401,
+                message: 'Invalid old password',
+                data: null,
+            });
         }
-        const newPasswordHash = await bcrypt.hash(newPassword, 10);
 
+        const newPasswordHash = await bcrypt.hash(newPassword, 10);
         await User.updatePassword(req.user.id, newPasswordHash);
 
-        res.send(`${req.user.firstName} your password is updated successfully!`);
+        return sendResponse(res, {
+            status: 200,
+            message: `${req.user.firstName} your password updated successfully`,
+            data: null,
+        });
     } catch (err) {
-        res.status(500).send('Error while updating user password: ' + err.message);
+        return sendResponse(res, {
+            status: 500,
+            message: err.message,
+            data: null,
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /user/2fa/enable:
+ *   patch:
+ *     summary: Enable 2FA for logged-in user
+ *     description: Once enabled OTP will be required on every login.
+ *     tags: [User]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: 2FA enabled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: 2FA enabled successfully. OTP will be required on next login.
+ *                 data:
+ *                   nullable: true
+ *                   example: null
+ *       400:
+ *         description: 2FA is already enabled
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+userRouter.patch('/user/2fa/enable', UserAuth, async (req, res) => {
+    try {
+        if (req.user.isTwoFactorEnabled) {
+            return sendResponse(res, {
+                status: 400,
+                message: '2FA is already enabled',
+                data: null,
+            });
+        }
+
+        await User.enableTwoFactor(req.user.id);
+
+        return sendResponse(res, {
+            status: 200,
+            message: '2FA enabled successfully. OTP will be required on next login.',
+            data: null,
+        });
+    } catch (err) {
+        return sendResponse(res, {
+            status: 500,
+            message: err.message,
+            data: null,
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /user/2fa/disable:
+ *   patch:
+ *     summary: Disable 2FA for logged-in user
+ *     description: Once disabled OTP will no longer be required on login.
+ *     tags: [User]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: 2FA disabled successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: 2FA disabled successfully
+ *                 data:
+ *                   nullable: true
+ *                   example: null
+ *       400:
+ *         description: 2FA is already disabled
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+userRouter.patch('/user/2fa/disable', UserAuth, async (req, res) => {
+    try {
+        if (!req.user.isTwoFactorEnabled) {
+            return sendResponse(res, {
+                status: 400,
+                message: '2FA is already disabled',
+                data: null,
+            });
+        }
+
+        await User.disableTwoFactor(req.user.id);
+
+        return sendResponse(res, {
+            status: 200,
+            message: '2FA disabled successfully',
+            data: null,
+        });
+    } catch (err) {
+        return sendResponse(res, {
+            status: 500,
+            message: err.message,
+            data: null,
+        });
     }
 });
 

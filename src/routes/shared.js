@@ -4,11 +4,11 @@
  *   schemas:
  *     ShareNote:
  *       type: object
- *       required: [userId, permission]
+ *       required: [emailId, permission]
  *       properties:
- *         userId:
- *           type: integer
- *           example: 2
+ *         emailId:
+ *           type: string
+ *           example: john@gmail.com
  *         permission:
  *           type: string
  *           enum: [view, edit]
@@ -21,15 +21,7 @@
  *           type: string
  *           enum: [view, edit]
  *           example: edit
- *     EditSharedNote:
- *       type: object
- *       required: [content]
- *       properties:
- *         content:
- *           type: string
- *           example: Updated content by shared user
  */
-
 
 const express = require('express');
 const sharedRouter = express.Router();
@@ -37,130 +29,15 @@ const SharedNote = require('../models/sharedNotes');
 const Note = require('../models/note');
 const User = require('../models/user');
 const { UserAuth } = require('../middleware/Auth');
-
-/**
- * @swagger
- * /shared/{token}/permission:
- *   patch:
- *     summary: Update permission of a share link (owner only)
- *     description: Owner can switch permission between view and edit at any time.
- *     tags: [Sharing]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *         description: Share token
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/UpdatePermission'
- *     responses:
- *       200:
- *         description: Permission updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Permission updated successfully
- *                 permission:
- *                   type: string
- *                   enum: [view, edit]
- *                   example: edit
- *       400:
- *         description: Invalid permission value
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Share link not found or unauthorized
- *       500:
- *         description: Error updating permission
- */
-
-sharedRouter.patch('/shared/:token/permission', UserAuth, async (req, res) => {
-    try {
-        const { token } = req.params;
-        const permission = req.body.permission?.toLowerCase();
-
-        if (!permission || !['view', 'edit'].includes(permission)) {
-            return res.status(400).send("Permission must be 'view' or 'edit'");
-        }
-
-        const updated = await SharedNote.updatePermission(token, req.user.id, permission);
-        if (!updated) {
-            return res.status(404).send('Share link not found or unauthorized');
-        }
-
-        res.json({ message: 'Permission updated successfully', permission });
-    } catch (err) {
-        res.status(500).send('Error updating permission: ' + err.message);
-    }
-});
-
-/**
- * @swagger
- * /shared/{token}/revoke:
- *   delete:
- *     summary: Revoke a share link (owner only)
- *     description: Once revoked the shared user can no longer access the note via that link.
- *     tags: [Sharing]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *         description: Share token to revoke
- *     responses:
- *       200:
- *         description: Share link revoked successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 message:
- *                   type: string
- *                   example: Share link revoked successfully
- *       401:
- *         description: Unauthorized
- *       404:
- *         description: Share link not found or unauthorized
- *       500:
- *         description: Error revoking share
- */
-
-sharedRouter.delete('/shared/:token/revoke', UserAuth, async (req, res) => {
-    try {
-        const { token } = req.params;
-
-        const revoked = await SharedNote.revoke(token, req.user.id);
-        if (!revoked) {
-            return res.status(404).send('Share link not found or unauthorized');
-        }
-
-        res.json({ message: 'Share link revoked successfully' });
-    } catch (err) {
-        res.status(500).send('Error revoking share: ' + err.message);
-    }
-});
+const validator = require('validator');
+const { sendResponse } = require('../utils/response');
 
 /**
  * @swagger
  * /notes/{id}/share:
  *   post:
- *     summary: Share a note with a specific user
- *     description: Owner shares a note with another user by their userId. Permission must be either view or edit. Title can never be edited via shared link.
+ *     summary: Share a note with a specific user by email
+ *     description: Owner shares note by email. Permission is view or edit. Title can never be edited by shared user.
  *     tags: [Sharing]
  *     security:
  *       - cookieAuth: []
@@ -185,100 +62,99 @@ sharedRouter.delete('/shared/:token/revoke', UserAuth, async (req, res) => {
  *             schema:
  *               type: object
  *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
  *                 message:
  *                   type: string
  *                   example: Note shared with John Doe successfully
- *                 shareLink:
- *                   type: string
- *                   example: http://localhost:3000/shared/a1b2c3...
- *                 sharedWith:
+ *                 data:
  *                   type: object
  *                   properties:
- *                     userId:
- *                       type: integer
- *                       example: 2
- *                     name:
+ *                     shareLink:
  *                       type: string
- *                       example: John Doe
- *                     email:
+ *                       example: http://localhost:5173/notes/1
+ *                     sharedWith:
+ *                       type: object
+ *                       properties:
+ *                         name:
+ *                           type: string
+ *                           example: John Doe
+ *                         email:
+ *                           type: string
+ *                           example: john@gmail.com
+ *                     permission:
  *                       type: string
- *                       example: john@gmail.com
- *                 permission:
- *                   type: string
- *                   enum: [view, edit]
- *                   example: view
- *                 token:
- *                   type: string
- *                   example: a1b2c3d4e5f6...
+ *                       enum: [view, edit]
+ *                       example: view
+ *                     token:
+ *                       type: string
+ *                       example: a1b2c3d4e5f6...
  *       400:
- *         description: Invalid note ID, invalid userId, invalid permission, already shared, or sharing with yourself
+ *         description: Invalid note ID, invalid email, invalid permission, already shared, or sharing with yourself
  *       401:
  *         description: Unauthorized
  *       404:
- *         description: Note or user not found
+ *         description: Note not found or no user found with this email
  *       500:
- *         description: Error sharing note
+ *         description: Server error
  */
 
 sharedRouter.post('/notes/:id/share', UserAuth, async (req, res) => {
     try {
         const noteId = parseInt(req.params.id);
-        const sharedWithUserId = parseInt(req.body.userId);         
         const permission = req.body.permission?.toLowerCase();
         const ownerId = req.user.id;
+        const emailId = req.body.emailId?.toLowerCase().trim();
+        const validator = require('validator');
 
         if (!noteId || isNaN(noteId)) {
-            return res.status(400).send('Invalid note ID');
+            return sendResponse(res, { status: 400, message: 'Invalid note ID', data: null });
         }
-
-        if (!sharedWithUserId || isNaN(sharedWithUserId)) {
-            return res.status(400).send('Invalid userId');
+        if (!emailId) {
+            return sendResponse(res, { status: 400, message: 'emailId is required', data: null });
         }
-
+        if (!validator.isEmail(emailId)) {
+            return sendResponse(res, { status: 400, message: 'Invalid email address', data: null });
+        }
+        if (emailId === req.user.emailId.toLowerCase()) {
+            return sendResponse(res, { status: 400, message: 'You cannot share a note with yourself', data: null });
+        }
         if (!permission || !['view', 'edit'].includes(permission)) {
-            return res.status(400).send("Permission must be 'view' or 'edit'");
-        }
-
-        if (sharedWithUserId === ownerId) {
-            return res.status(400).send('You cannot share a note with yourself');
+            return sendResponse(res, { status: 400, message: "Permission must be 'view' or 'edit'", data: null });
         }
 
         const note = await Note.findOne(noteId, ownerId);
         if (!note) {
-            return res.status(404).send('Note not found');
+            return sendResponse(res, { status: 404, message: 'Note not found', data: null });
         }
 
-        const targetUser = await User.findById(sharedWithUserId);
+        const targetUser = await User.findByEmail(emailId);
         if (!targetUser) {
-            return res.status(404).send('User to share with not found');
+            return sendResponse(res, { status: 404, message: 'No user found with this email', data: null });
         }
 
-        const shared = await SharedNote.create({
-            noteId,
-            ownerId,
-            sharedWithUserId,
-            permission,
-        });
+        const shared = await SharedNote.create({ noteId, ownerId, sharedWithUserId: targetUser.id, permission });
+        const shareLink = `${process.env.FRONTEND_URL}/notes/${noteId}`;
 
-        const shareLink = `${req.protocol}://${req.get('host')}/shared/${shared.token}`;
-
-        res.status(201).json({
+        return sendResponse(res, {
+            status: 201,
             message: `Note shared with ${targetUser.firstName} ${targetUser.lastName} successfully`,
-            shareLink,
-            sharedWith: {
-                userId: targetUser.id,
-                name: `${targetUser.firstName} ${targetUser.lastName}`,
-                email: targetUser.emailId,
+            data: {
+                shareLink,
+                sharedWith: {
+                    name: `${targetUser.firstName} ${targetUser.lastName}`,
+                    email: targetUser.emailId,
+                },
+                permission: shared.permission,
+                token: shared.token,
             },
-            permission: shared.permission,
-            token: shared.token,
         });
-    }
-    catch (err) {
+    } catch (err) {
         if (err.message === 'Note is already shared to this User!!') {
-            return res.status(400).send(err.message);
+            return sendResponse(res, { status: 400, message: err.message, data: null });
         }
-        return res.status(500).send('Error sharing note: ' + err.message);
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 
@@ -287,7 +163,6 @@ sharedRouter.post('/notes/:id/share', UserAuth, async (req, res) => {
  * /notes/{id}/shares:
  *   get:
  *     summary: Get all share links for a note (owner only)
- *     description: Returns all active and inactive share links for a note with user details and share links.
  *     tags: [Sharing]
  *     security:
  *       - cookieAuth: []
@@ -300,56 +175,55 @@ sharedRouter.post('/notes/:id/share', UserAuth, async (req, res) => {
  *         description: ID of the note
  *     responses:
  *       200:
- *         description: List of all shares for the note
+ *         description: Shares fetched successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: integer
- *                     example: 1
- *                   noteId:
- *                     type: integer
- *                     example: 1
- *                   ownerId:
- *                     type: integer
- *                     example: 1
- *                   sharedWithUserId:
- *                     type: integer
- *                     example: 2
- *                   token:
- *                     type: string
- *                     example: a1b2c3d4e5f6...
- *                   permission:
- *                     type: string
- *                     enum: [view, edit]
- *                     example: view
- *                   isActive:
- *                     type: boolean
- *                     example: true
- *                   shareLink:
- *                     type: string
- *                     example: http://localhost:3000/shared/a1b2c3...
- *                   firstName:
- *                     type: string
- *                     example: John
- *                   lastName:
- *                     type: string
- *                     example: Doe
- *                   emailId:
- *                     type: string
- *                     example: john@gmail.com
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Shares fetched successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       token:
+ *                         type: string
+ *                         example: a1b2c3d4e5f6...
+ *                       permission:
+ *                         type: string
+ *                         enum: [view, edit]
+ *                         example: view
+ *                       isActive:
+ *                         type: boolean
+ *                         example: true
+ *                       shareLink:
+ *                         type: string
+ *                         example: http://localhost:5173/notes/1
+ *                       firstName:
+ *                         type: string
+ *                         example: John
+ *                       lastName:
+ *                         type: string
+ *                         example: Doe
+ *                       emailId:
+ *                         type: string
+ *                         example: john@gmail.com
  *       401:
  *         description: Unauthorized
  *       404:
  *         description: Note not found
  *       500:
- *         description: Error fetching shares
+ *         description: Server error
  */
-
 
 sharedRouter.get('/notes/:id/shares', UserAuth, async (req, res) => {
     try {
@@ -357,68 +231,31 @@ sharedRouter.get('/notes/:id/shares', UserAuth, async (req, res) => {
 
         const note = await Note.findOne(id, req.user.id);
         if (!note) {
-            return res.status(404).send('Note not found');
+            return sendResponse(res, { status: 404, message: 'Note not found', data: null });
         }
 
         const shares = await SharedNote.findByNoteId(id, req.user.id);
-
         const sharesWithLinks = shares.map(share => ({
             ...share,
-            shareLink: `${req.protocol}://${req.get('host')}/shared/${share.token}`,
+            shareLink: `${process.env.FRONTEND_URL}/notes/${id}`,
         }));
 
-        res.json(sharesWithLinks);
+        return sendResponse(res, {
+            status: 200,
+            message: 'Shares fetched successfully',
+            data: sharesWithLinks,
+        });
     } catch (err) {
-        res.status(500).send('Error fetching shares: ' + err.message);
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 
 /**
  * @swagger
- * /shared/{token}:
- *   get:
- *     summary: Access a shared note via link (shared user only)
- *     description: Only the specific user the note was shared with can access it. Must be logged in.
- *     tags: [Sharing]
- *     security:
- *       - cookieAuth: []
- *     parameters:
- *       - in: path
- *         name: token
- *         required: true
- *         schema:
- *           type: string
- *         description: Share token from the share link
- *     responses:
- *       200:
- *         description: Shared note content
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 title:
- *                   type: string
- *                   example: Shopping List
- *                 content:
- *                   type: string
- *                   example: Milk, Eggs, Bread
- *                 permission:
- *                   type: string
- *                   enum: [view, edit]
- *                   example: view
- *                 message:
- *                   type: string
- *                   example: You can view this note only
- *       401:
- *         description: Unauthorized
- *       403:
- *         description: No access or link has been revoked
- *       500:
- *         description: Error accessing shared note
+ * /shared/{token}/permission:
  *   patch:
- *     summary: Edit content of a shared note (edit permission only)
- *     description: Only the specific shared user with edit permission can update content. Title is always protected and cannot be changed.
+ *     summary: Update permission of a share link (owner only)
+ *     description: Switch permission between view and edit at any time.
  *     tags: [Sharing]
  *     security:
  *       - cookieAuth: []
@@ -428,88 +265,125 @@ sharedRouter.get('/notes/:id/shares', UserAuth, async (req, res) => {
  *         required: true
  *         schema:
  *           type: string
- *         description: Share token from the share link
+ *         description: Share token
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
- *             $ref: '#/components/schemas/EditSharedNote'
+ *             $ref: '#/components/schemas/UpdatePermission'
  *     responses:
  *       200:
- *         description: Note content updated successfully
+ *         description: Permission updated successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
  *                 message:
  *                   type: string
- *                   example: Note content updated successfully
+ *                   example: Permission updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     permission:
+ *                       type: string
+ *                       enum: [view, edit]
+ *                       example: edit
  *       400:
- *         description: Content is required
+ *         description: Invalid permission value
  *       401:
  *         description: Unauthorized
- *       403:
- *         description: View only permission or link has been revoked
+ *       404:
+ *         description: Share link not found or unauthorized
  *       500:
- *         description: Error updating shared note
+ *         description: Server error
  */
 
-sharedRouter.get('/shared/:token', UserAuth, async (req, res) => {
+sharedRouter.patch('/shared/:token/permission', UserAuth, async (req, res) => {
     try {
         const { token } = req.params;
+        const permission = req.body.permission?.toLowerCase();
 
-        // findByToken checks both token AND userId match
-        const shared = await SharedNote.findByToken(token, req.user.id);
-
-        if (!shared) {
-            return res.status(403).send('You do not have access to this note or link has been revoked');
+        if (!permission || !['view', 'edit'].includes(permission)) {
+            return sendResponse(res, { status: 400, message: "Permission must be 'view' or 'edit'", data: null });
         }
 
-        res.json({
-            title: shared.title,
-            content: shared.content,
-            permission: shared.permission,
-            message: shared.permission === 'edit'
-                ? 'You can edit the content of this note'
-                : 'You can view this note only',
+        const updated = await SharedNote.updatePermission(token, req.user.id, permission);
+        if (!updated) {
+            return sendResponse(res, { status: 404, message: 'Share link not found or unauthorized', data: null });
+        }
+
+        return sendResponse(res, {
+            status: 200,
+            message: 'Permission updated successfully',
+            data: { permission },
         });
     } catch (err) {
-        res.status(500).send('Error accessing shared note: ' + err.message);
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 
-sharedRouter.patch('/shared/:token', UserAuth, async (req, res) => {
+/**
+ * @swagger
+ * /shared/{token}/revoke:
+ *   delete:
+ *     summary: Revoke a share link (owner only)
+ *     description: Once revoked the shared user can no longer access the note.
+ *     tags: [Sharing]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: token
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Share token to revoke
+ *     responses:
+ *       200:
+ *         description: Share link revoked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Share link revoked successfully
+ *                 data:
+ *                   nullable: true
+ *                   example: null
+ *       401:
+ *         description: Unauthorized
+ *       404:
+ *         description: Share link not found or unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+sharedRouter.delete('/shared/:token/revoke', UserAuth, async (req, res) => {
     try {
         const { token } = req.params;
-        const { content } = req.body;
 
-        if (!content) {
-            return res.status(400).send('Content is required');
+        const revoked = await SharedNote.revoke(token, req.user.id);
+        if (!revoked) {
+            return sendResponse(res, { status: 404, message: 'Share link not found or unauthorized', data: null });
         }
 
-        // Validate token AND userId match
-        const shared = await SharedNote.findByToken(token, req.user.id);
-        if (!shared) {
-            return res.status(403).send('You do not have access to this note or link has been revoked');
-        }
-
-        // Check edit permission
-        if (shared.permission !== 'edit') {
-            return res.status(403).send('You only have view permission on this note');
-        }
-
-        // Update only content — title is never touched
-        const db = require('../config/database').getDB();
-        await db.execute(
-            'UPDATE notes SET content = ? WHERE id = ?',
-            [content, shared.noteId]
-        );
-
-        res.json({ message: 'Note content updated successfully' });
+        return sendResponse(res, {
+            status: 200,
+            message: 'Share link revoked successfully',
+            data: null,
+        });
     } catch (err) {
-        res.status(500).send('Error updating shared note: ' + err.message);
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 

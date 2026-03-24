@@ -4,7 +4,7 @@ const Note = require('../models/note');
 const SharedNote = require('../models/sharedNotes');
 
 const { getDB } = require('../config/database')
-
+const { sendResponse } = require('../utils/response');
 const { UserAuth } = require('../middleware/Auth');
 
 /**
@@ -28,16 +28,48 @@ const { UserAuth } = require('../middleware/Auth');
  *                 example: My First Note
  *               content:
  *                 type: string
- *                 example: Hello world
+ *                 example: This is my note content
  *     responses:
  *       201:
  *         description: Note created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                   example: Note created successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     title:
+ *                       type: string
+ *                       example: My First Note
+ *                     content:
+ *                       type: string
+ *                       example: This is my note content
+ *                     userId:
+ *                       type: integer
+ *                       example: 1
+ *                     createdAt:
+ *                       type: string
+ *                       example: 2026-03-18T00:00:00.000Z
+ *                     updatedAt:
+ *                       type: string
+ *                       example: 2026-03-18T00:00:00.000Z
  *       400:
- *         description: Title is required
+ *         description: Title is required or exceeds limit
  *       401:
  *         description: Unauthorized
  *       500:
- *         description: Error creating note
+ *         description: Server error
  */
 
 noteRouter.post('/notes', UserAuth, async (req, res) => {
@@ -45,23 +77,24 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
         const { title, content } = req.body;
 
         if (!title || title.trim() === '') {
-            return res.status(400).send('Title is required');
+            return sendResponse(res, { status: 400, message: 'Title is required', data: null });
         }
         if (title.length > 200) {
-            return res.status(400).send('Title cannot exceed 200 characters');
+            return sendResponse(res, { status: 400, message: 'Title cannot exceed 200 characters', data: null });
         }
         if (content && content.length > 50000) {
-            return res.status(400).send('Content cannot exceed 50000 characters');
+            return sendResponse(res, { status: 400, message: 'Content cannot exceed 50000 characters', data: null });
         }
 
-        const note = await Note.create({
-            title: title.trim(),
-            content,
-            userId: req.user.id,   // MySQL uses id not _id
+        const note = await Note.create({ title: title.trim(), content, userId: req.user.id });
+
+        return sendResponse(res, {
+            status: 201,
+            message: 'Note created successfully',
+            data: note,
         });
-        res.status(201).json(note);
     } catch (err) {
-        res.status(500).send('Error creating note: ' + err.message);
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 
@@ -75,78 +108,72 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: Own notes and shared notes
+ *         description: Notes fetched successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 ownNotes:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 1
- *                       title:
- *                         type: string
- *                         example: My First Note
- *                       content:
- *                         type: string
- *                         example: This is my note
- *                       userId:
- *                         type: integer
- *                         example: 1
- *                       role:
- *                         type: string
- *                         example: owner
- *                       createdAt:
- *                         type: string
- *                         example: 2026-03-18T00:00:00.000Z
- *                       updatedAt:
- *                         type: string
- *                         example: 2026-03-18T00:00:00.000Z
- *                 sharedNotes:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       id:
- *                         type: integer
- *                         example: 2
- *                       title:
- *                         type: string
- *                         example: John's Note
- *                       content:
- *                         type: string
- *                         example: Shared with me
- *                       userId:
- *                         type: integer
- *                         example: 2
- *                       role:
- *                         type: string
- *                         example: shared
- *                       permission:
- *                         type: string
- *                         enum: [view, edit]
- *                         example: edit
- *                       token:
- *                         type: string
- *                         example: a1b2c3...
- *                       shareLink:
- *                         type: string
- *                         example: http://localhost:3000/shared/a1b2c3...
- *                       ownerFirstName:
- *                         type: string
- *                         example: John
- *                       ownerLastName:
- *                         type: string
- *                         example: Doe
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Notes fetched successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     ownNotes:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                             example: 1
+ *                           title:
+ *                             type: string
+ *                             example: My First Note
+ *                           content:
+ *                             type: string
+ *                             example: This is my note
+ *                           userId:
+ *                             type: integer
+ *                             example: 1
+ *                           role:
+ *                             type: string
+ *                             example: owner
+ *                     sharedNotes:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: integer
+ *                             example: 2
+ *                           title:
+ *                             type: string
+ *                             example: John's Note
+ *                           role:
+ *                             type: string
+ *                             example: shared
+ *                           permission:
+ *                             type: string
+ *                             enum: [view, edit]
+ *                             example: edit
+ *                           ownerFirstName:
+ *                             type: string
+ *                             example: John
+ *                           ownerLastName:
+ *                             type: string
+ *                             example: Doe
+ *                           shareLink:
+ *                             type: string
+ *                             example: http://localhost:5173/notes/2
  *       401:
  *         description: Unauthorized
  *       500:
- *         description: Error fetching notes
+ *         description: Server error
  */
 
 noteRouter.get('/notes', UserAuth, async (req, res) => {
@@ -154,9 +181,7 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
         const db = getDB();
 
         const [ownNotes] = await db.execute(
-            `SELECT *, 'owner' AS role FROM notes 
-             WHERE userId = ? 
-             ORDER BY updatedAt DESC`,
+            `SELECT *, 'owner' AS role FROM notes WHERE userId = ? ORDER BY updatedAt DESC`,
             [req.user.id]
         );
 
@@ -168,7 +193,7 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
              FROM shared_notes
              JOIN notes ON shared_notes.noteId = notes.id
              JOIN users ON shared_notes.ownerId = users.id
-             WHERE shared_notes.sharedWithUserId = ? 
+             WHERE shared_notes.sharedWithUserId = ?
              AND shared_notes.isActive = TRUE
              ORDER BY notes.updatedAt DESC`,
             [req.user.id]
@@ -176,94 +201,96 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
 
         const sharedWithLinks = sharedNotes.map(note => ({
             ...note,
-            shareLink: `${req.protocol}://${req.get('host')}/shared/${note.token}`,
+            shareLink: `${process.env.FRONTEND_URL}/shared/${note.token}`,
         }));
 
-        res.json({
-            ownNotes,
-            sharedNotes: sharedWithLinks,
+        return sendResponse(res, {
+            status: 200,
+            message: 'Notes fetched successfully',
+            data: {
+                ownNotes,
+                sharedNotes: sharedWithLinks,
+            },
         });
-
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
-    catch (err) {
-        res.status(400).send('Error fetching notes : ' + err.message);
-    };
 });
 
-/**                           
+/**
  * @swagger
  * /notes/shared-with-me:
  *   get:
  *     summary: Get all notes shared with the logged-in user
- *     description: Returns all active notes shared with the logged-in user along with owner details and share links. Must be placed before /notes/{id} route.
+ *     description: Must be placed before /notes/{id} route to avoid route conflict.
  *     tags: [Notes]
  *     security:
  *       - cookieAuth: []
  *     responses:
  *       200:
- *         description: List of notes shared with me
+ *         description: Shared notes fetched successfully
  *         content:
  *           application/json:
  *             schema:
- *               type: array
- *               items:
- *                 type: object
- *                 properties:
- *                   id:
- *                     type: integer
- *                     example: 1
- *                   title:
- *                     type: string
- *                     example: Shopping List
- *                   content:
- *                     type: string
- *                     example: Milk, Eggs, Bread
- *                   permission:
- *                     type: string
- *                     enum: [view, edit]
- *                     example: view
- *                   token:
- *                     type: string
- *                     example: a1b2c3d4e5f6...
- *                   shareLink:
- *                     type: string
- *                     example: http://localhost:3000/shared/a1b2c3...
- *                   ownerFirstName:
- *                     type: string
- *                     example: Sahil
- *                   ownerLastName:
- *                     type: string
- *                     example: Dattani
- *                   noteId:
- *                     type: integer
- *                     example: 1
- *                   ownerId:
- *                     type: integer
- *                     example: 1
- *                   isActive:
- *                     type: boolean
- *                     example: true
- *                   createdAt:
- *                     type: string
- *                     example: 2026-03-18T00:00:00.000Z
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Shared notes fetched successfully
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       id:
+ *                         type: integer
+ *                         example: 1
+ *                       title:
+ *                         type: string
+ *                         example: Shopping List
+ *                       content:
+ *                         type: string
+ *                         example: Milk, Eggs, Bread
+ *                       permission:
+ *                         type: string
+ *                         enum: [view, edit]
+ *                         example: view
+ *                       token:
+ *                         type: string
+ *                         example: a1b2c3d4e5f6...
+ *                       shareLink:
+ *                         type: string
+ *                         example: http://localhost:5173/notes/1
+ *                       ownerFirstName:
+ *                         type: string
+ *                         example: Sahil
+ *                       ownerLastName:
+ *                         type: string
+ *                         example: Dattani
  *       401:
  *         description: Unauthorized
  *       500:
- *         description: Error fetching shared notes
+ *         description: Server error
  */
 
 noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
     try {
         const notes = await SharedNote.findSharedWithMe(req.user.id);
-
         const notesWithLinks = notes.map(note => ({
             ...note,
-            shareLink: `${req.protocol}://${req.get('host')}/shared/${note.token}`,
+            shareLink: `${process.env.FRONTEND_URL}/notes/${note.token}`,
         }));
 
-        res.json(notesWithLinks);
+        return sendResponse(res, {
+            status: 200,
+            message: 'Shared notes fetched successfully',
+            data: notesWithLinks,
+        });
     } catch (err) {
-        res.status(500).send('Error fetching shared notes: ' + err.message);
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 
@@ -271,7 +298,8 @@ noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
  * @swagger
  * /notes/{id}:
  *   get:
- *     summary: Get a note by ID
+ *     summary: Get a note by ID — works for both owner and shared user
+ *     description: Owner gets full access. Shared user gets note based on their permission level.
  *     tags: [Notes]
  *     security:
  *       - cookieAuth: []
@@ -284,36 +312,47 @@ noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
  *         description: ID of the note
  *     responses:
  *       200:
- *         description: Note found
+ *         description: Note fetched successfully
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
- *                 id:
+ *                 status:
  *                   type: integer
- *                   example: 1
- *                 title:
+ *                   example: 200
+ *                 message:
  *                   type: string
- *                   example: My First Note
- *                 content:
- *                   type: string
- *                   example: This is my note
- *                 userId:
- *                   type: integer
- *                   example: 1
- *                 createdAt:
- *                   type: string
- *                   example: 2026-03-18T00:00:00.000Z
- *                 updatedAt:
- *                   type: string
- *                   example: 2026-03-18T00:00:00.000Z
+ *                   example: Note fetched successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     title:
+ *                       type: string
+ *                       example: My First Note
+ *                     content:
+ *                       type: string
+ *                       example: This is my note
+ *                     role:
+ *                       type: string
+ *                       enum: [owner, shared]
+ *                       example: owner
+ *                     permission:
+ *                       type: string
+ *                       enum: [view, edit]
+ *                       example: edit
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: You do not have access to this note
  *       404:
  *         description: Note not found
  *   patch:
- *     summary: Update a note (only send fields you want to update)
+ *     summary: Update a note — owner can update title and content, shared user can only update content
+ *     description: Owner can update both title and content. Shared user with edit permission can only update content. Title is always protected for shared users.
  *     tags: [Notes]
  *     security:
  *       - cookieAuth: []
@@ -339,14 +378,43 @@ noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: Note updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Note updated successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     title:
+ *                       type: string
+ *                       example: Updated Title
+ *                     content:
+ *                       type: string
+ *                       example: Updated content
+ *                     role:
+ *                       type: string
+ *                       enum: [owner, shared]
+ *                       example: owner
  *       400:
- *         description: No fields provided to update or invalid ID
+ *         description: No fields provided or content required for shared user
  *       401:
  *         description: Unauthorized
+ *       403:
+ *         description: No access or view only permission
  *       404:
  *         description: Note not found
  *   delete:
- *     summary: Delete a note
+ *     summary: Delete a note (owner only)
  *     tags: [Notes]
  *     security:
  *       - cookieAuth: []
@@ -360,8 +428,20 @@ noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: Note deleted successfully
- *       400:
- *         description: Invalid note ID
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Note deleted successfully
+ *                 data:
+ *                   nullable: true
+ *                   example: null
  *       401:
  *         description: Unauthorized
  *       404:
@@ -370,15 +450,50 @@ noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
 
 noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
     try {
-        const notes = await Note.findOne(req.params.id, req.user.id);
-        if (!notes) {
-            return res.status(404).send("Note not found");
+        const { id } = req.params;
+
+        const note = await Note.findOne(id, req.user.id);
+        if (note) {
+            return sendResponse(res, {
+                status: 200,
+                message: 'Note fetched successfully',
+                data: { ...note, role: 'owner', permission: 'edit' },
+            });
         }
-        res.json(notes);
+
+        const db = getDB();
+        const [sharedRows] = await db.execute(
+            `SELECT notes.*, shared_notes.permission, shared_notes.token,
+             'shared' AS role,
+             users.firstName AS ownerFirstName,
+             users.lastName AS ownerLastName
+             FROM shared_notes
+             JOIN notes ON shared_notes.noteId = notes.id
+             JOIN users ON shared_notes.ownerId = users.id
+             WHERE notes.id = ?
+             AND shared_notes.sharedWithUserId = ?
+             AND shared_notes.isActive = TRUE`,
+            [id, req.user.id]
+        );
+
+        if (sharedRows.length > 0) {
+            return sendResponse(res, {
+                status: 200,
+                message: sharedRows[0].permission === 'edit'
+                    ? 'You can edit the content of this note'
+                    : 'You can view this note only',
+                data: sharedRows[0],
+            });
+        }
+
+        return sendResponse(res, {
+            status: 403,
+            message: 'You do not have access to this note',
+            data: null,
+        });
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
-    catch (err) {
-        res.status(400).send('Error fetching notes : ' + err.message);
-    };
 });
 
 noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
@@ -386,31 +501,74 @@ noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
         const { id } = req.params;
         const { title, content } = req.body;
 
-        const updates = {};
-        if (title !== undefined) updates.title = title;
-        if (content !== undefined) updates.content = content;
+        const note = await Note.findOne(id, req.user.id);
+        if (note) {
+            const updates = {};
+            if (title !== undefined) updates.title = title;
+            if (content !== undefined) updates.content = content;
 
-        if (Object.keys(updates).length === 0) {
-            return res.status(400).send('No fields provided to update');
+            if (Object.keys(updates).length === 0) {
+                return sendResponse(res, { status: 400, message: 'No fields provided to update', data: null });
+            }
+
+            const updatedNote = await Note.update(id, req.user.id, updates);
+            return sendResponse(res, {
+                status: 200,
+                message: 'Note updated successfully',
+                data: { ...updatedNote, role: 'owner' },
+            });
         }
 
-        const note = await Note.update(id, req.user.id, updates);
-        if (!note) return res.status(404).send('Note not found');
-        res.json(note);
-    }
-    catch (err) {
-        res.status(500).send('Error updating note : ' + err.message);
+        const db = getDB();
+        const [sharedRows] = await db.execute(
+            `SELECT shared_notes.*, notes.title, notes.content
+             FROM shared_notes
+             JOIN notes ON shared_notes.noteId = notes.id
+             WHERE notes.id = ?
+             AND shared_notes.sharedWithUserId = ?
+             AND shared_notes.isActive = TRUE`,
+            [id, req.user.id]
+        );
+
+        if (sharedRows.length === 0) {
+            return sendResponse(res, { status: 403, message: 'You do not have access to this note', data: null });
+        }
+
+        if (sharedRows[0].permission !== 'edit') {
+            return sendResponse(res, { status: 403, message: 'You only have view permission on this note', data: null });
+        }
+
+        if (!content) {
+            return sendResponse(res, { status: 400, message: 'Content is required', data: null });
+        }
+
+        await db.execute('UPDATE notes SET content = ? WHERE id = ?', [content, id]);
+        const [updatedRows] = await db.execute('SELECT * FROM notes WHERE id = ?', [id]);
+
+        return sendResponse(res, {
+            status: 200,
+            message: 'Note content updated successfully',
+            data: { ...updatedRows[0], role: 'shared' },
+        });
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 
 noteRouter.delete('/notes/:id', UserAuth, async (req, res) => {
     try {
         const deleted = await Note.delete(req.params.id, req.user.id);
-        if (!deleted) return res.status(404).send('Note not found');
-        res.send('Note deleted successfully');
-    }
-    catch (err) {
-        res.status(500).send('Error deleting note : ' + err.message);
+        if (!deleted) {
+            return sendResponse(res, { status: 404, message: 'Note not found', data: null });
+        }
+
+        return sendResponse(res, {
+            status: 200,
+            message: 'Note deleted successfully',
+            data: null,
+        });
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 

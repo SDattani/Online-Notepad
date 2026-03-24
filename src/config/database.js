@@ -21,6 +21,7 @@ const connectDB = async () => {
             lastName VARCHAR(100),
             emailId VARCHAR(255) NOT NULL UNIQUE,
             password VARCHAR(255) NOT NULL,
+            isTwoFactorEnabled BOOLEAN DEFAULT FALSE,
             createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
         )
@@ -51,6 +52,19 @@ const connectDB = async () => {
             FOREIGN KEY (noteId) REFERENCES notes(id) ON DELETE CASCADE,
             FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE,
             FOREIGN KEY (sharedWithUserId) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS otps (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        otp VARCHAR(6) NOT NULL,
+        tempToken VARCHAR(64) NOT NULL UNIQUE,
+        expiresAt TIMESTAMP NOT NULL,
+        isUsed BOOLEAN DEFAULT FALSE,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
         )
     `);
 

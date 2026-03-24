@@ -91,6 +91,20 @@ const SharedNote = {
         );
         return result.affectedRows > 0;
     },
+
+    findByTokenForOwner: async (token, ownerId) => {
+        const db = getDB();
+        const [rows] = await db.execute(
+            `SELECT shared_notes.*, notes.title, notes.content, notes.userId
+         FROM shared_notes
+         JOIN notes ON shared_notes.noteId = notes.id
+         WHERE shared_notes.token = ?
+         AND shared_notes.isActive = TRUE
+         AND shared_notes.ownerId = ?`,
+            [token, ownerId]
+        );
+        return rows[0] || null;
+    },
 };
 
 module.exports = SharedNote;
