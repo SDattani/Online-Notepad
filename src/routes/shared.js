@@ -31,6 +31,8 @@ const User = require('../models/user');
 const { UserAuth } = require('../middleware/Auth');
 const validator = require('validator');
 const { sendResponse } = require('../utils/response');
+const createShareLink = require('../utils/createShareLink');
+const Audit = require('../models/audit');
 
 /**
  * @swagger
@@ -135,13 +137,20 @@ sharedRouter.post('/notes/:id/share', UserAuth, async (req, res) => {
         }
 
         const shared = await SharedNote.create({ noteId, ownerId, sharedWithUserId: targetUser.id, permission });
-        const shareLink = `${process.env.FRONTEND_URL}/notes/${noteId}`;
+
+        await Audit.logSharedNoteAction(
+            ownerId, 
+            noteId, 
+            'NOTE_SHARED', 
+            null, 
+            { sharedWithEmail: targetUser.emailId, permission: shared.permission } // newData
+        );
 
         return sendResponse(res, {
             status: 201,
             message: `Note shared with ${targetUser.firstName} ${targetUser.lastName} successfully`,
             data: {
-                shareLink,
+                shareLink: createShareLink(shared.token),
                 sharedWith: {
                     name: `${targetUser.firstName} ${targetUser.lastName}`,
                     email: targetUser.emailId,
@@ -237,7 +246,7 @@ sharedRouter.get('/notes/:id/shares', UserAuth, async (req, res) => {
         const shares = await SharedNote.findByNoteId(id, req.user.id);
         const sharesWithLinks = shares.map(share => ({
             ...share,
-            shareLink: `${process.env.FRONTEND_URL}/notes/${id}`,
+            shareLink: createShareLink(share.token),
         }));
 
         return sendResponse(res, {
@@ -312,10 +321,24 @@ sharedRouter.patch('/shared/:token/permission', UserAuth, async (req, res) => {
             return sendResponse(res, { status: 400, message: "Permission must be 'view' or 'edit'", data: null });
         }
 
+        const existingShare = await SharedNote.findByTokenForOwner(token, req.user.id);
+
+        if (!existingShare) {
+            return sendResponse(res, { status: 404, message: 'Share link not found or unauthorized', data: null });
+        }
+
         const updated = await SharedNote.updatePermission(token, req.user.id, permission);
         if (!updated) {
             return sendResponse(res, { status: 404, message: 'Share link not found or unauthorized', data: null });
         }
+
+        await Audit.logSharedNoteAction(
+            req.user.id, 
+            existingShare.noteId, 
+            'SHARE_PERMISSION_UPDATED', 
+            { permission: existingShare.permission }, // previousData
+            { permission: permission }                // newData
+        );
 
         return sendResponse(res, {
             status: 200,
@@ -372,10 +395,24 @@ sharedRouter.delete('/shared/:token/revoke', UserAuth, async (req, res) => {
     try {
         const { token } = req.params;
 
+        const existingShare = await SharedNote.findByTokenForOwner(token, req.user.id);
+
+        if (!existingShare) {
+            return sendResponse(res, { status: 404, message: 'Share link not found or unauthorized', data: null });
+        }
+
         const revoked = await SharedNote.revoke(token, req.user.id);
         if (!revoked) {
             return sendResponse(res, { status: 404, message: 'Share link not found or unauthorized', data: null });
         }
+
+        await Audit.logSharedNoteAction(
+            req.user.id, 
+            existingShare.noteId, 
+            'SHARE_REVOKED', 
+            { sharedWithUserId: existingShare.sharedWithUserId }, 
+            { isActive: false }
+        );
 
         return sendResponse(res, {
             status: 200,

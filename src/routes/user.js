@@ -6,6 +6,7 @@ const { getDB } = require("../config/database")
 const { UserAuth } = require('../middleware/Auth');
 const User = require('../models/user');
 const { sendResponse } = require('../utils/response');
+const Audit = require('../models/audit');
 
 /**
  * @swagger
@@ -147,6 +148,13 @@ userRouter.patch("/user/password", UserAuth, async (req, res) => {
         const newPasswordHash = await bcrypt.hash(newPassword, 10);
         await User.updatePassword(req.user.id, newPasswordHash);
 
+        await Audit.logUserAction(
+            req.user.id,
+            'PASSWORD_UPDATED',
+            { passwordHash: req.user.password },
+            { passwordHash: newPasswordHash }
+        );
+
         return sendResponse(res, {
             status: 200,
             message: `${req.user.firstName} your password updated successfully`,
@@ -206,6 +214,13 @@ userRouter.patch('/user/2fa/enable', UserAuth, async (req, res) => {
         }
 
         await User.enableTwoFactor(req.user.id);
+
+        await Audit.logUserAction(
+            req.user.id,
+            '2FA_ENABLED',
+            { isTwoFactorEnabled: false },
+            { isTwoFactorEnabled: true }
+        );
 
         return sendResponse(res, {
             status: 200,
@@ -267,6 +282,13 @@ userRouter.patch('/user/2fa/disable', UserAuth, async (req, res) => {
 
         await User.disableTwoFactor(req.user.id);
 
+        await Audit.logUserAction(
+            req.user.id,
+            '2FA_DISABLED',
+            { isTwoFactorEnabled: true },
+            { isTwoFactorEnabled: false }
+        );
+
         return sendResponse(res, {
             status: 200,
             message: '2FA disabled successfully',
@@ -278,6 +300,123 @@ userRouter.patch('/user/2fa/disable', UserAuth, async (req, res) => {
             message: err.message,
             data: null,
         });
+    }
+});
+
+/**
+ * @swagger
+ * /user/audit-logs/account:
+ *   get:
+ *     summary: Get account activity audit logs
+ *     description: Returns login, logout, signup, password change, and 2FA activity. Use ?limit=N to control results (max 100).
+ *     tags: [User]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *         description: Max number of records to return (default 50, max 100)
+ *     responses:
+ *       200:
+ *         description: Account audit logs fetched
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+userRouter.get('/user/audit-logs/account', UserAuth, async (req, res) => {
+    try {
+        const db = getDB();
+        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+        const [logs] = await db.execute(
+            `SELECT * FROM user_audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ${limit}`,
+            [req.user.id]
+        );
+        return sendResponse(res, { status: 200, message: 'Account audit logs fetched', data: logs });
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
+    }
+});
+
+/**
+ * @swagger
+ * /user/audit-logs/notes:
+ *   get:
+ *     summary: Get note activity audit logs
+ *     description: Returns created, updated, and deleted note history. Use ?limit=N to control results (max 100).
+ *     tags: [User]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *         description: Max number of records to return (default 50, max 100)
+ *     responses:
+ *       200:
+ *         description: Note audit logs fetched
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+userRouter.get('/user/audit-logs/notes', UserAuth, async (req, res) => {
+    try {
+        const db = getDB();
+        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+        const [logs] = await db.execute(
+            `SELECT * FROM note_audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ${limit}`,
+            [req.user.id]
+        );
+        return sendResponse(res, { status: 200, message: 'Note audit logs fetched', data: logs });
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
+    }
+});
+
+/**
+ * @swagger
+ * /user/audit-logs/shared:
+ *   get:
+ *     summary: Get shared note activity audit logs
+ *     description: Returns share, revoke, and permission change history. Use ?limit=N to control results (max 100).
+ *     tags: [User]
+ *     security:
+ *       - cookieAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           example: 50
+ *         description: Max number of records to return (default 50, max 100)
+ *     responses:
+ *       200:
+ *         description: Shared note audit logs fetched
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+
+userRouter.get('/user/audit-logs/shared', UserAuth, async (req, res) => {
+    try {
+        const db = getDB();
+        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+        const [logs] = await db.execute(
+            `SELECT * FROM shared_note_audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ${limit}`,
+            [req.user.id]
+        );
+        return sendResponse(res, { status: 200, message: 'Shared note audit logs fetched', data: logs });
+    } catch (err) {
+        return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
 

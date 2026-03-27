@@ -60,11 +60,54 @@ const connectDB = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         userId INT NOT NULL,
         otp VARCHAR(6) NOT NULL,
-        tempToken VARCHAR(64) NOT NULL UNIQUE,
         expiresAt TIMESTAMP NOT NULL,
         isUsed BOOLEAN DEFAULT FALSE,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+        )
+    `);
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS user_audit_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            userId INT NOT NULL,
+            action VARCHAR(100) NOT NULL,
+            previousData JSON,
+            newData JSON,
+            FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+            INDEX idx_user_action (userId)
+        )
+    `);
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS note_audit_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            userId INT NOT NULL,
+            noteId INT NOT NULL,
+            action VARCHAR(100) NOT NULL,
+            previousData JSON,
+            newData JSON,
+            FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (noteId) REFERENCES notes(id) ON DELETE CASCADE,
+            INDEX idx_note_history (noteId),
+            INDEX idx_note_user (userId)
+        )
+    `);
+
+    await db.execute(`
+        CREATE TABLE IF NOT EXISTS shared_note_audit_log (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            userId INT NOT NULL,
+            noteId INT NOT NULL,
+            action VARCHAR(100) NOT NULL,
+            previousData JSON,
+            newData JSON,
+            FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (noteId) REFERENCES notes(id) ON DELETE CASCADE,
+            INDEX idx_shared_history (noteId),
+            INDEX idx_shared_user (userId)
         )
     `);
 

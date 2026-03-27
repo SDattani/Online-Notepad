@@ -8,8 +8,6 @@ const OTP = {
 
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-        const tempToken = crypto.randomBytes(32).toString('hex');
-
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
         await db.execute(
@@ -18,24 +16,25 @@ const OTP = {
         );
 
         await db.execute(
-            `INSERT INTO otps (userId, otp, tempToken, expiresAt)
-             VALUES (?, ?, ?, ?)`,
-            [userId, otp, tempToken, expiresAt]
+            `INSERT INTO otps (userId, otp, expiresAt)
+             VALUES (?, ?, ?)`,
+            [userId, otp, expiresAt]
         );
 
-        return { otp, tempToken };
+        return { otp };
     },
 
-    verify: async (tempToken, otp) => {
+    verify: async (emailId , otp) => {
         const db = getDB();
 
         const [rows] = await db.execute(
-            `SELECT * FROM otps
-             WHERE tempToken = ?
-             AND otp = ?
-             AND isUsed = FALSE
-             AND expiresAt > NOW()`,
-            [tempToken, otp]
+            `SELECT otps.* FROM otps
+             JOIN users ON otps.userId = users.id
+             WHERE users.emailId = ?
+             AND otps.otp = ?
+             AND otps.isUsed = FALSE
+             AND otps.expiresAt > NOW()`,
+            [emailId.toLowerCase(), otp]
         );
 
         if (rows.length === 0) return null;

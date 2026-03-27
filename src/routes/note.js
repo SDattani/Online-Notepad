@@ -6,6 +6,8 @@ const SharedNote = require('../models/sharedNotes');
 const { getDB } = require('../config/database')
 const { sendResponse } = require('../utils/response');
 const { UserAuth } = require('../middleware/Auth');
+const createShareLink = require('../utils/createShareLink');
+const Audit = require('../models/audit');
 
 /**
  * @swagger
@@ -87,6 +89,14 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
         }
 
         const note = await Note.create({ title: title.trim(), content, userId: req.user.id });
+
+        await Audit.logNoteAction(
+            req.user.id,
+            note.id,
+            'NOTE_CREATED',
+            null,
+            { title: note.title, content: note.content }
+        );
 
         return sendResponse(res, {
             status: 201,
@@ -201,8 +211,10 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
 
         const sharedWithLinks = sharedNotes.map(note => ({
             ...note,
-            shareLink: `${process.env.FRONTEND_URL}/shared/${note.token}`,
+            shareLink: createShareLink(note.token),
         }));
+
+        await Audit.logNoteAction(req.user.id, null, 'NOTES_VIEWED', null, null);
 
         return sendResponse(res, {
             status: 200,
@@ -281,7 +293,7 @@ noteRouter.get('/notes/shared-with-me', UserAuth, async (req, res) => {
         const notes = await SharedNote.findSharedWithMe(req.user.id);
         const notesWithLinks = notes.map(note => ({
             ...note,
-            shareLink: `${process.env.FRONTEND_URL}/notes/${note.token}`,
+            shareLink: createShareLink(note.token),
         }));
 
         return sendResponse(res, {
@@ -454,6 +466,8 @@ noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
 
         const note = await Note.findOne(id, req.user.id);
         if (note) {
+            await Audit.logNoteAction(req.user.id, parseInt(id), 'NOTE_VIEWED', null, null);
+
             return sendResponse(res, {
                 status: 200,
                 message: 'Note fetched successfully',
@@ -476,7 +490,9 @@ noteRouter.get('/notes/:id', UserAuth, async (req, res) => {
             [id, req.user.id]
         );
 
+
         if (sharedRows.length > 0) {
+            await Audit.logNoteAction(req.user.id, parseInt(id), 'NOTE_VIEWED_AS_SHARED', null, null);
             return sendResponse(res, {
                 status: 200,
                 message: sharedRows[0].permission === 'edit'
@@ -502,6 +518,7 @@ noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
         const { title, content } = req.body;
 
         const note = await Note.findOne(id, req.user.id);
+
         if (note) {
             const updates = {};
             if (title !== undefined) updates.title = title;
@@ -512,6 +529,15 @@ noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
             }
 
             const updatedNote = await Note.update(id, req.user.id, updates);
+
+            await Audit.logNoteAction(
+                req.user.id,
+                id,
+                'NOTE_UPDATED',
+                { title: note.title, content: note.content },            // previousData
+                { title: updatedNote.title, content: updatedNote.content } // newData
+            );
+
             return sendResponse(res, {
                 status: 200,
                 message: 'Note updated successfully',
@@ -545,6 +571,14 @@ noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
         await db.execute('UPDATE notes SET content = ? WHERE id = ?', [content, id]);
         const [updatedRows] = await db.execute('SELECT * FROM notes WHERE id = ?', [id]);
 
+        await Audit.logNoteAction(
+            req.user.id,
+            id,
+            'NOTE_UPDATED_BY_SHARED_USER',
+            { content: sharedRows[0].content },    // previousData (old content)
+            { content: updatedRows[0].content }    // newData (new content)
+        );
+
         return sendResponse(res, {
             status: 200,
             message: 'Note content updated successfully',
@@ -557,10 +591,23 @@ noteRouter.patch('/notes/:id', UserAuth, async (req, res) => {
 
 noteRouter.delete('/notes/:id', UserAuth, async (req, res) => {
     try {
+        const note = await Note.findOne(req.params.id, req.user.id);
+        if (!note) {
+            return sendResponse(res, { status: 404, message: 'Note not found', data: null });
+        }
+
         const deleted = await Note.delete(req.params.id, req.user.id);
         if (!deleted) {
             return sendResponse(res, { status: 404, message: 'Note not found', data: null });
         }
+
+        await Audit.logNoteAction(
+            req.user.id,
+            req.params.id,
+            'NOTE_DELETED',
+            { title: note.title, content: note.content },
+            null
+        );
 
         return sendResponse(res, {
             status: 200,

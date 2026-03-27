@@ -7,6 +7,8 @@ const { validateSignupData } = require('../utils/validation');
 const { UserAuth } = require('../middleware/Auth');
 const { sendResponse } = require('../utils/response');
 const OTP = require('../models/otp');
+const { sendOTPEmail } = require('../utils/email');
+const Audit = require('../models/audit');
 
 /**
  * @swagger
@@ -81,6 +83,13 @@ authRouter.post('/signup', async (req, res) => {
         const passwordHash = await bcrypt.hash(password, 10);
         const newUser = await User.create({ firstName, lastName, emailId, password: passwordHash });
 
+        await Audit.logUserAction(
+            newUser.id, 
+            'USER_SIGNUP', 
+            null, 
+            { emailId: newUser.emailId } // newData
+        );
+
         return sendResponse(res, {
             status: 201,
             message: 'User signed up successfully',
@@ -104,7 +113,7 @@ authRouter.post('/signup', async (req, res) => {
  * /login:
  *   post:
  *     summary: Login user
- *     description: If 2FA is enabled returns tempToken instead of cookie. Use POST /auth/verify-otp to complete login.
+ *     description: If 2FA is enabled OTP will be sent to console. Use POST /auth/verify-otp with your email and OTP to complete login. No tempToken needed anymore.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -135,17 +144,25 @@ authRouter.post('/signup', async (req, res) => {
  *                   type: string
  *                   example: User login successfully
  *                 data:
- *                   type: object
- *                   properties:
- *                     firstName:
- *                       type: string
- *                       example: Sahil
- *                     lastName:
- *                       type: string
- *                       example: Dattani
- *                     emailId:
- *                       type: string
- *                       example: sahil@gmail.com
+ *                   oneOf:
+ *                     - type: object
+ *                       description: 2FA disabled — login complete
+ *                       properties:
+ *                         firstName:
+ *                           type: string
+ *                           example: Sahil
+ *                         lastName:
+ *                           type: string
+ *                           example: Dattani
+ *                         emailId:
+ *                           type: string
+ *                           example: sahil@gmail.com
+ *                     - type: object
+ *                       description: 2FA enabled — OTP sent
+ *                       properties:
+ *                         expiresIn:
+ *                           type: string
+ *                           example: 10 minutes
  *       400:
  *         description: Invalid email format
  *       401:
@@ -171,6 +188,8 @@ authRouter.post('/login', async (req, res) => {
 
         const user = await User.findByEmail(emailId);
         if (!user) {
+            await Audit.logUserAction(null, 'LOGIN_FAILED', null, { reason: 'User not found', emailId });
+
             return sendResponse(res, {
                 status: 404,
                 message: 'Invalid Credentials',
@@ -180,6 +199,8 @@ authRouter.post('/login', async (req, res) => {
 
         const isPasswordValid = await User.validatePassword(password, user.password);
         if (!isPasswordValid) {
+            await Audit.logUserAction(user.id, 'LOGIN_FAILED', null, { reason: 'Invalid password' });
+
             return sendResponse(res, {
                 status: 401,
                 message: 'Invalid Credentials',
@@ -188,17 +209,23 @@ authRouter.post('/login', async (req, res) => {
         }
 
         if (user.isTwoFactorEnabled) {
-            const { otp, tempToken } = await OTP.create(user.id);
+            const { otp } = await OTP.create(user.id);
 
-            console.log(`\n============================`);
-            console.log(`2FA OTP for ${user.emailId}: ${otp}`);
-            console.log(`============================\n`);
+            try {
+                await sendOTPEmail(user.emailId, otp);
+            } catch (error) {
+                console.error('Email sending failed:', error);
+                return sendResponse(res, {
+                    status: 500,
+                    message: 'Failed to send OTP email. Please try again later.',
+                    data: null,
+                });
+            }
 
             return sendResponse(res, {
                 status: 200,
-                message: '2FA enabled. OTP sent. Please verify to complete login.',
+                message: '2FA enabled. OTP sent to your email. Please verify to complete login.',
                 data: {
-                    tempToken,  
                     expiresIn: '10 minutes',
                 },
             });
@@ -208,6 +235,8 @@ authRouter.post('/login', async (req, res) => {
         res.cookie('token', token, {
             expires: new Date(Date.now() + 604800 * 1000),
         });
+
+        await Audit.logUserAction(user.id, 'LOGIN_SUCCESS', null, null);
 
         return sendResponse(res, {
             status: 200,
@@ -258,6 +287,9 @@ authRouter.post('/login', async (req, res) => {
 
 authRouter.post('/logout', UserAuth, async (req, res) => {
     res.cookie('token', null, { expires: new Date(Date.now()) });
+
+    await Audit.logUserAction(req.user.id, 'LOGOUT', null, null);
+
     return sendResponse(res, {
         status: 200,
         message: 'User logged out successfully',
@@ -270,7 +302,6 @@ authRouter.post('/logout', UserAuth, async (req, res) => {
  * /auth/verify-otp:
  *   post:
  *     summary: Verify 2FA OTP to complete login
- *     description: Only required when 2FA is enabled. Send tempToken received from login + OTP from console.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -278,42 +309,19 @@ authRouter.post('/logout', UserAuth, async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [tempToken, otp]
+ *             required: [emailId, otp]
  *             properties:
- *               tempToken:
+ *               emailId:
  *                 type: string
- *                 example: a1b2c3d4e5f6...
+ *                 example: sahil@gmail.com
  *               otp:
  *                 type: string
  *                 example: "123456"
  *     responses:
  *       200:
- *         description: OTP verified successfully, JWT cookie set
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: OTP verified successfully. Login complete!
- *                 data:
- *                   type: object
- *                   properties:
- *                     firstName:
- *                       type: string
- *                       example: Sahil
- *                     lastName:
- *                       type: string
- *                       example: Dattani
- *                     emailId:
- *                       type: string
- *                       example: sahil@gmail.com
+ *         description: OTP verified, login complete
  *       400:
- *         description: tempToken and otp are required
+ *         description: emailId and otp are required
  *       401:
  *         description: Invalid or expired OTP
  *       404:
@@ -324,17 +332,26 @@ authRouter.post('/logout', UserAuth, async (req, res) => {
 
 authRouter.post('/auth/verify-otp', async (req, res) => {
     try {
-        const { tempToken, otp } = req.body;
+        const otp  = req.body.otp;
+        const emailId = req.body.emailId
 
-        if (!tempToken || !otp) {
+        if (!emailId || !otp) {
             return sendResponse(res, {
                 status: 400,
-                message: 'tempToken and otp are required',
+                message: 'emailId and otp are required',
                 data: null,
             });
         }
 
-        const otpRecord = await OTP.verify(tempToken, otp);
+        if (!validator.isEmail(emailId)) {
+            return sendResponse(res, {
+                status: 400,
+                message: 'Invalid email address',
+                data: null,
+            });
+        }
+
+        const otpRecord = await OTP.verify(emailId  , otp);
         if (!otpRecord) {
             return sendResponse(res, {
                 status: 401,
@@ -357,6 +374,8 @@ authRouter.post('/auth/verify-otp', async (req, res) => {
             expires: new Date(Date.now() + 604800 * 1000),
         });
 
+        await Audit.logUserAction(user.id, 'LOGIN_SUCCESS_2FA', null, null);
+
         return sendResponse(res, {
             status: 200,
             message: 'OTP verified successfully. Login complete!',
@@ -365,6 +384,80 @@ authRouter.post('/auth/verify-otp', async (req, res) => {
                 lastName: user.lastName,
                 emailId: user.emailId,
             },
+        });
+    } catch (err) {
+        return sendResponse(res, {
+            status: 500,
+            message: err.message,
+            data: null,
+        });
+    }
+});
+
+/**
+ * @swagger
+ * /auth/resend-otp:
+ *   post:
+ *     summary: Resend 2FA OTP to email
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [emailId]
+ *             properties:
+ *               emailId:
+ *                 type: string
+ *                 example: sahil@gmail.com
+ *     responses:
+ *       200:
+ *         description: OTP resent successfully
+ *       400:
+ *         description: Invalid email or 2FA not enabled
+ *       404:
+ *         description: User not found
+ *       500:
+ *         description: Server error
+ */
+
+authRouter.post('/auth/resend-otp', async (req, res) => {
+    try {
+        const emailId = req.body.emailId?.toLowerCase();
+
+        if (!emailId || !validator.isEmail(emailId)) {
+            return sendResponse(res, {
+                status: 400,
+                message: 'Enter a valid emailId',
+                data: null,
+            });
+        }
+
+        const user = await User.findByEmail(emailId);
+        if (!user) {
+            return sendResponse(res, {
+                status: 404,
+                message: 'User not found',
+                data: null,
+            });
+        }
+
+        if (!user.isTwoFactorEnabled) {
+            return sendResponse(res, {
+                status: 400,
+                message: '2FA is not enabled for this account',
+                data: null,
+            });
+        }
+
+        const { otp } = await OTP.create(user.id);
+        await sendOTPEmail(user.emailId, otp);
+
+        return sendResponse(res, {
+            status: 200,
+            message: 'OTP resent to your email successfully',
+            data: { expiresIn: '10 minutes' },
         });
     } catch (err) {
         return sendResponse(res, {
