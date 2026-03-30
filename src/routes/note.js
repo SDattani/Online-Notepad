@@ -214,7 +214,7 @@ noteRouter.get('/notes', UserAuth, async (req, res) => {
             shareLink: createShareLink(note.token),
         }));
 
-        await Audit.logNoteAction(req.user.id, null, 'NOTES_VIEWED', null, null);
+        await Audit.logNoteAction(req.user.id, null, 'NOTES_VIEWED', null, { ownNotes , sharedWithLinks});
 
         return sendResponse(res, {
             status: 200,

@@ -84,7 +84,7 @@ const connectDB = async () => {
             id INT AUTO_INCREMENT PRIMARY KEY,
             createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             userId INT NOT NULL,
-            noteId INT NOT NULL,
+            noteId INT,
             action VARCHAR(100) NOT NULL,
             previousData JSON,
             newData JSON,
@@ -110,6 +110,82 @@ const connectDB = async () => {
             INDEX idx_shared_user (userId)
         )
     `);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        action VARCHAR(100) NOT NULL UNIQUE,
+        description VARCHAR(255),
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+`);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS teams (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        ownerId INT NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (ownerId) REFERENCES users(id) ON DELETE CASCADE
+    )
+`);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS team_roles (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        teamId INT NOT NULL,
+        name VARCHAR(50) NOT NULL,
+        createdBy INT NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_role_per_team (teamId, name)
+    )
+`);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS role_permissions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        roleId INT NOT NULL,
+        permissionId INT NOT NULL,
+        FOREIGN KEY (roleId) REFERENCES team_roles(id) ON DELETE CASCADE,
+        FOREIGN KEY (permissionId) REFERENCES permissions(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_role_permission (roleId, permissionId)
+    )
+`);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS team_members (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        teamId INT NOT NULL,
+        userId INT NOT NULL,
+        roleId INT NOT NULL,
+        invitedBy INT NOT NULL,
+        status ENUM('pending', 'active', 'removed') DEFAULT 'pending',
+        joinedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE,
+        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (roleId) REFERENCES team_roles(id) ON DELETE CASCADE,
+        FOREIGN KEY (invitedBy) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_team_member (teamId, userId)
+    )
+`);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS team_audit_log (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        teamId INT,
+        performedBy INT,
+        action VARCHAR(100) NOT NULL,
+        previousData JSON,
+        newData JSON,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE SET NULL,
+        FOREIGN KEY (performedBy) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_team_audit (teamId),
+        INDEX idx_team_audit_user (performedBy)
+    )
+`);
 
     console.log('Tables ready!');
     return db;

@@ -35,7 +35,26 @@ const Audit = {
         } catch (error) {
             console.error('Failed to write to Shared Note Audit Log:', error);
         }
-    }
+    },
+
+    logTeamAction: async (teamId, performedBy, action, previousData = null, newData = null) => {
+        try {
+            const db = getDB();
+            await db.execute(
+                `INSERT INTO team_audit_log (teamId, performedBy, action, previousData, newData)
+             VALUES (?, ?, ?, ?, ?)`,
+                [
+                    teamId,
+                    performedBy,
+                    action,
+                    previousData ? JSON.stringify(previousData) : null,
+                    newData ? JSON.stringify(newData) : null,
+                ]
+            );
+        } catch (error) {
+            console.error('Failed to write to Team Audit Log:', error);
+        }
+    },
 };
 
 module.exports = Audit;
