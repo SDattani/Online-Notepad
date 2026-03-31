@@ -6,6 +6,7 @@ const PermissionAuth = require('../middleware/PermissionAuth');
 const { sendResponse } = require('../utils/response');
 const User = require('../models/user');
 const Audit = require('../models/audit');
+const { sendInviteEmail } = require('../utils/email');
 
 /**
  * @swagger
@@ -166,8 +167,8 @@ teamRouter.get('/teams/:teamId', UserAuth, async (req, res) => {
  * @swagger
  * /teams/{teamId}/roles:
  *   post:
- *     summary: Create a role in a team
- *     description: Creates a new role within a team. Requires 'role:create' permission. Currently, this is restricted to the team owner.
+ *     summary: Create a role in a team (owner only)
+ *     description: "Creates a new role. Optionally set parentRoleName to define hierarchy. Only the owner can create roles."
  *     tags: [Teams]
  *     security:
  *       - cookieAuth: []
@@ -183,27 +184,67 @@ teamRouter.get('/teams/:teamId', UserAuth, async (req, res) => {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [name]
+ *             required: [name, permissions]
  *             properties:
  *               name:
  *                 type: string
  *                 example: Manager
+ *               parentRoleName:
+ *                 type: string
+ *                 example: null
+ *                 description: Name of the parent role. Leave empty if this role has no parent.
  *               permissions:
  *                 type: array
  *                 items:
  *                   type: string
- *                 example: [note:create, note:edit, note:view]
+ *                 example: ["note:create", "note:edit", "note:share", "note:view", "role:assign", "role:delete"]
  *     responses:
  *       201:
  *         description: Role created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                   example: Role created successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     id:
+ *                       type: integer
+ *                       example: 1
+ *                     name:
+ *                       type: string
+ *                       example: Manager
+ *                     teamId:
+ *                       type: integer
+ *                       example: 1
+ *                     parentRoleId:
+ *                       type: integer
+ *                       nullable: true
+ *                       example: null
+ *                     permissions:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["note:create", "note:edit", "note:share", "note:view", "role:assign", "role:delete"]
  *       400:
- *         description: Role name is required
+ *         description: Role name required, no permissions provided, or invalid permissions
  *       403:
- *         description: Forbidden. Only the team owner can create roles.
+ *         description: Only team owner can create roles
+ *       404:
+ *         description: Parent role not found
  *       500:
  *         description: Server error
  */
-teamRouter.post('/teams/:teamId/roles', UserAuth, PermissionAuth('role:create'), async (req, res) => {    try {
+
+teamRouter.post('/teams/:teamId/roles', UserAuth, PermissionAuth('role:create'), async (req, res) => {
+    try {
         const { teamId } = req.params;
         const { name, permissions = [] } = req.body;
         const db = getDB();
@@ -212,7 +253,10 @@ teamRouter.post('/teams/:teamId/roles', UserAuth, PermissionAuth('role:create'),
             return sendResponse(res, { status: 400, message: 'Role name is required', data: null });
         }
 
-        // Only owner can create roles
+        if (permissions.length === 0) {
+            return sendResponse(res, { status: 400, message: 'At least one permission is required', data: null });
+        }
+
         const [teamRows] = await db.execute(
             `SELECT * FROM teams WHERE id = ? AND ownerId = ?`, [teamId, req.user.id]
         );
@@ -220,6 +264,34 @@ teamRouter.post('/teams/:teamId/roles', UserAuth, PermissionAuth('role:create'),
             return sendResponse(res, { status: 403, message: 'Only team owner can create roles', data: null });
         }
 
+        // Validate ALL permissions first before creating anything
+        const invalidPermissions = [];
+        const validPermissionIds = [];
+
+        for (const action of permissions) {
+            const [permRows] = await db.execute(
+                `SELECT id FROM permissions WHERE action = ?`, [action]
+            );
+            if (permRows.length === 0) {
+                invalidPermissions.push(action);
+            } else {
+                validPermissionIds.push({ action, id: permRows[0].id });
+            }
+        }
+
+        // Reject whole request if any permission is invalid
+        if (invalidPermissions.length > 0) {
+            return sendResponse(res, {
+                status: 400,
+                message: `Invalid permissions: ${invalidPermissions.join(', ')}. Role was not created.`,
+                data: {
+                    invalidPermissions,
+                    validPermissions: validPermissionIds.map(p => p.action),
+                },
+            });
+        }
+
+        // All valid — now create the role
         const [result] = await db.execute(
             `INSERT INTO team_roles (teamId, name, createdBy) VALUES (?, ?, ?)`,
             [teamId, name.trim(), req.user.id]
@@ -227,32 +299,26 @@ teamRouter.post('/teams/:teamId/roles', UserAuth, PermissionAuth('role:create'),
 
         const roleId = result.insertId;
 
-        await Audit.logTeamAction(
-            teamId,
-            req.user.id,
-            'ROLE_CREATED',
-            null,
-            { roleId: roleId, name: name.trim(), permissions }
-        );
-
-        // Assign permissions if provided
-        if (permissions.length > 0) {
-            for (const action of permissions) {
-                const [permRows] = await db.execute(
-                    `SELECT id FROM permissions WHERE action = ?`, [action]
-                );
-                if (permRows.length > 0) {
-                    await db.execute(
-                        `INSERT IGNORE INTO role_permissions (roleId, permissionId) VALUES (?, ?)`,
-                        [roleId, permRows[0].id]
-                    );
-                }
-            }
+        for (const perm of validPermissionIds) {
+            await db.execute(
+                `INSERT IGNORE INTO role_permissions (roleId, permissionId) VALUES (?, ?)`,
+                [roleId, perm.id]
+            );
         }
+
+        await Audit.logTeamAction(
+            teamId, req.user.id, 'ROLE_CREATED',
+            null,
+            { roleId, name: name.trim(), permissions }
+        );
 
         const [roleRows] = await db.execute(`SELECT * FROM team_roles WHERE id = ?`, [roleId]);
 
-        return sendResponse(res, { status: 201, message: 'Role created successfully', data: roleRows[0] });
+        return sendResponse(res, {
+            status: 201,
+            message: 'Role created successfully',
+            data: { ...roleRows[0], permissions: validPermissionIds.map(p => p.action) },
+        });
     } catch (err) {
         return sendResponse(res, { status: 500, message: err.message, data: null });
     }
@@ -316,9 +382,9 @@ teamRouter.get('/teams/:teamId/roles', UserAuth, async (req, res) => {
 
 /**
  * @swagger
- * /teams/{teamId}/roles/{roleId}:
+ * /teams/{teamId}/roles/{roleName}:
  *   delete:
- *     summary: Delete a role (owner only)
+ *     summary: Delete a role by name (owner only)
  *     tags: [Teams]
  *     security:
  *       - cookieAuth: []
@@ -329,13 +395,26 @@ teamRouter.get('/teams/:teamId/roles', UserAuth, async (req, res) => {
  *         schema:
  *           type: integer
  *       - in: path
- *         name: roleId
+ *         name: roleName
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
+ *         description: Name of the role to delete
+ *         example: Intern
  *     responses:
  *       200:
  *         description: Role deleted successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Role Intern deleted successfully
  *       403:
  *         description: Only team owner can delete roles
  *       404:
@@ -343,9 +422,10 @@ teamRouter.get('/teams/:teamId/roles', UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-teamRouter.delete('/teams/:teamId/roles/:roleId', UserAuth, async (req, res) => {
+
+teamRouter.delete('/teams/:teamId/roles/:roleName', UserAuth, async (req, res) => {
     try {
-        const { teamId, roleId } = req.params;
+        const { teamId, roleName } = req.params;
         const db = getDB();
 
         const [teamRows] = await db.execute(
@@ -356,19 +436,19 @@ teamRouter.delete('/teams/:teamId/roles/:roleId', UserAuth, async (req, res) => 
         }
 
         const [result] = await db.execute(
-            `DELETE FROM team_roles WHERE id = ? AND teamId = ?`, [roleId, teamId]
+            `DELETE FROM team_roles WHERE name = ? AND teamId = ?`, [roleName, teamId]
         );
         if (result.affectedRows === 0) {
-            return sendResponse(res, { status: 404, message: 'Role not found', data: null });
+            return sendResponse(res, { status: 404, message: `Role '${roleName}' not found`, data: null });
         }
+
         await Audit.logTeamAction(
-            teamId,
-            req.user.id,
-            'ROLE_DELETED',
-            { roleId },
+            teamId, req.user.id, 'ROLE_DELETED',
+            { roleName },
             null
         );
-        return sendResponse(res, { status: 200, message: 'Role deleted successfully', data: null });
+
+        return sendResponse(res, { status: 200, message: `Role '${roleName}' deleted successfully`, data: null });
     } catch (err) {
         return sendResponse(res, { status: 500, message: err.message, data: null });
     }
@@ -376,9 +456,10 @@ teamRouter.delete('/teams/:teamId/roles/:roleId', UserAuth, async (req, res) => 
 
 /**
  * @swagger
- * /teams/{teamId}/roles/{roleId}/permissions:
+ * /teams/{teamId}/roles/{roleName}/permissions:
  *   post:
- *     summary: Add a permission to a role (owner only)
+ *     summary: Add permissions to a role by role name
+ *     description: "Owner can assign any valid permission. Members with role:assign permission can only assign permissions they have, and only to roles directly under them."
  *     tags: [Teams]
  *     security:
  *       - cookieAuth: []
@@ -389,63 +470,194 @@ teamRouter.delete('/teams/:teamId/roles/:roleId', UserAuth, async (req, res) => 
  *         schema:
  *           type: integer
  *       - in: path
- *         name: roleId
+ *         name: roleName
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
+ *         description: Name of the role to add permissions to
+ *         example: Developer
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required: [action]
+ *             required: [permissions]
  *             properties:
- *               action:
- *                 type: string
- *                 example: note:create
+ *               permissions:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 example: ["note:create", "note:edit", "note:view"]
  *     responses:
  *       200:
- *         description: Permission added successfully
+ *         description: Permissions processed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: Permissions processed successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     targetRole:
+ *                       type: string
+ *                       example: Developer
+ *                     added:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["note:create", "note:edit"]
+ *                     alreadyExists:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["note:view"]
+ *       400:
+ *         description: Invalid permissions provided
  *       403:
- *         description: Only team owner can manage permissions
+ *         description: "Missing role:assign permission or trying to assign permissions you do not have"
  *       404:
- *         description: Permission not found
+ *         description: Role not found
  *       500:
  *         description: Server error
  */
-teamRouter.post('/teams/:teamId/roles/:roleId/permissions', UserAuth, async (req, res) => {
+
+teamRouter.post('/teams/:teamId/roles/:roleName/permissions', UserAuth, async (req, res) => {
     try {
-        const { teamId, roleId } = req.params;
-        const { action } = req.body;
+        const { teamId, roleName } = req.params;
+        const { permissions = [] } = req.body;
         const db = getDB();
 
+        if (!Array.isArray(permissions) || permissions.length === 0) {
+            return sendResponse(res, { status: 400, message: 'permissions array is required and cannot be empty', data: null });
+        }
+
+        // Find the target role by name
+        const [targetRoleRows] = await db.execute(
+            `SELECT * FROM team_roles WHERE teamId = ? AND name = ?`, [teamId, roleName]
+        );
+        if (targetRoleRows.length === 0) {
+            return sendResponse(res, { status: 404, message: `Role '${roleName}' not found in this team`, data: null });
+        }
+        const targetRole = targetRoleRows[0];
+
+        // Check if user is owner
         const [teamRows] = await db.execute(
             `SELECT * FROM teams WHERE id = ? AND ownerId = ?`, [teamId, req.user.id]
         );
-        if (teamRows.length === 0) {
-            return sendResponse(res, { status: 403, message: 'Only team owner can manage permissions', data: null });
+        const isOwner = teamRows.length > 0;
+
+        let myPermissions = null;
+        let myRoleId = null;
+
+        if (!isOwner) {
+            // Check if this member has role:assign permission
+            const [memberRows] = await db.execute(
+                `SELECT tm.roleId FROM team_members tm
+                 JOIN role_permissions rp ON tm.roleId = rp.roleId
+                 JOIN permissions p ON rp.permissionId = p.id
+                 WHERE tm.teamId = ? AND tm.userId = ? AND tm.status = 'active'
+                 AND p.action = 'role:assign'`,
+                [teamId, req.user.id]
+            );
+            if (memberRows.length === 0) {
+                return sendResponse(res, { status: 403, message: "You do not have 'role:assign' permission", data: null });
+            }
+
+            myRoleId = memberRows[0].roleId;
+
+            // Check target role is a child of this member's role (parentRoleId must point to myRoleId)
+            if (targetRole.parentRoleId !== myRoleId) {
+                return sendResponse(res, {
+                    status: 403,
+                    message: `You can only assign permissions to roles that are directly under your role`,
+                    data: null,
+                });
+            }
+
+            // Get this member's own permissions
+            const [myPermRows] = await db.execute(
+                `SELECT p.action FROM team_members tm
+                 JOIN role_permissions rp ON tm.roleId = rp.roleId
+                 JOIN permissions p ON rp.permissionId = p.id
+                 WHERE tm.teamId = ? AND tm.userId = ? AND tm.status = 'active'`,
+                [teamId, req.user.id]
+            );
+            myPermissions = myPermRows.map(r => r.action);
         }
 
-        const [permRows] = await db.execute(`SELECT * FROM permissions WHERE action = ?`, [action]);
-        if (permRows.length === 0) {
-            return sendResponse(res, { status: 404, message: `Permission '${action}' not found`, data: null });
+        // Validate all permissions
+        const invalidPermissions = [];
+        const unauthorizedPermissions = [];
+        const validPermissionIds = [];
+
+        for (const action of permissions) {
+            const [permRows] = await db.execute(
+                `SELECT id FROM permissions WHERE action = ?`, [action]
+            );
+            if (permRows.length === 0) {
+                invalidPermissions.push(action);
+            } else if (myPermissions !== null && !myPermissions.includes(action)) {
+                unauthorizedPermissions.push(action);
+            } else {
+                validPermissionIds.push({ action, id: permRows[0].id });
+            }
         }
 
-        await db.execute(
-            `INSERT IGNORE INTO role_permissions (roleId, permissionId) VALUES (?, ?)`,
-            [roleId, permRows[0].id]
-        );
+        if (invalidPermissions.length > 0) {
+            return sendResponse(res, {
+                status: 400,
+                message: `Invalid permissions: ${invalidPermissions.join(', ')}`,
+                data: { invalidPermissions },
+            });
+        }
+
+        if (unauthorizedPermissions.length > 0) {
+            return sendResponse(res, {
+                status: 403,
+                message: `You cannot assign permissions you do not have: ${unauthorizedPermissions.join(', ')}`,
+                data: { unauthorizedPermissions },
+            });
+        }
+
+        // Add permissions
+        const added = [];
+        const alreadyExists = [];
+
+        for (const perm of validPermissionIds) {
+            const [existing] = await db.execute(
+                `SELECT id FROM role_permissions WHERE roleId = ? AND permissionId = ?`,
+                [targetRole.id, perm.id]
+            );
+            if (existing.length > 0) {
+                alreadyExists.push(perm.action);
+            } else {
+                await db.execute(
+                    `INSERT INTO role_permissions (roleId, permissionId) VALUES (?, ?)`,
+                    [targetRole.id, perm.id]
+                );
+                added.push(perm.action);
+            }
+        }
 
         await Audit.logTeamAction(
-            teamId,
-            req.user.id,
-            'ROLE_PERMISSION_ADDED',
+            teamId, req.user.id, 'ROLE_PERMISSION_ADDED',
             null,
-            { roleId, action }
+            { targetRole: roleName, added, alreadyExists }
         );
 
-        return sendResponse(res, { status: 200, message: 'Permission added to role successfully', data: null });
+        return sendResponse(res, {
+            status: 200,
+            message: 'Permissions processed successfully',
+            data: { targetRole: roleName, added, alreadyExists },
+        });
     } catch (err) {
         return sendResponse(res, { status: 500, message: err.message, data: null });
     }
@@ -453,9 +665,10 @@ teamRouter.post('/teams/:teamId/roles/:roleId/permissions', UserAuth, async (req
 
 /**
  * @swagger
- * /teams/{teamId}/roles/{roleId}/permissions/{permissionId}:
+ * /teams/{teamId}/roles/{roleName}/permissions/{action}:
  *   delete:
- *     summary: Remove a permission from a role (owner only)
+ *     summary: Remove a permission from a role by role name and permission action
+ *     description: "Owner can remove any permission. Members with role:delete permission can only remove permissions from roles directly under them."
  *     tags: [Teams]
  *     security:
  *       - cookieAuth: []
@@ -466,54 +679,109 @@ teamRouter.post('/teams/:teamId/roles/:roleId/permissions', UserAuth, async (req
  *         schema:
  *           type: integer
  *       - in: path
- *         name: roleId
+ *         name: roleName
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
+ *         description: Name of the role to remove permission from
+ *         example: Developer
  *       - in: path
- *         name: permissionId
+ *         name: action
  *         required: true
  *         schema:
- *           type: integer
+ *           type: string
+ *         description: "The permission action to remove e.g. note:create"
+ *         example: "note:create"
  *     responses:
  *       200:
  *         description: Permission removed successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 200
+ *                 message:
+ *                   type: string
+ *                   example: "Permission note:create removed from Developer successfully"
  *       403:
- *         description: Only team owner can manage permissions
+ *         description: "Missing role:delete permission or target role is not under your role"
  *       404:
- *         description: Permission not found on this role
+ *         description: Role or permission not found
  *       500:
  *         description: Server error
  */
-teamRouter.delete('/teams/:teamId/roles/:roleId/permissions/:permissionId', UserAuth, async (req, res) => {
+
+teamRouter.delete('/teams/:teamId/roles/:roleName/permissions/:action', UserAuth, async (req, res) => {
     try {
-        const { teamId, roleId, permissionId } = req.params;
+        const { teamId, roleName, action } = req.params;
         const db = getDB();
 
+        // Find role by name
+        const [roleRows] = await db.execute(
+            `SELECT * FROM team_roles WHERE teamId = ? AND name = ?`, [teamId, roleName]
+        );
+        if (roleRows.length === 0) {
+            return sendResponse(res, { status: 404, message: `Role '${roleName}' not found`, data: null });
+        }
+
+        // Check if owner
         const [teamRows] = await db.execute(
             `SELECT * FROM teams WHERE id = ? AND ownerId = ?`, [teamId, req.user.id]
         );
-        if (teamRows.length === 0) {
-            return sendResponse(res, { status: 403, message: 'Only team owner can manage permissions', data: null });
+        const isOwner = teamRows.length > 0;
+
+        if (!isOwner) {
+            // Must have role:delete permission
+            const [memberRows] = await db.execute(
+                `SELECT tm.roleId FROM team_members tm
+                 JOIN role_permissions rp ON tm.roleId = rp.roleId
+                 JOIN permissions p ON rp.permissionId = p.id
+                 WHERE tm.teamId = ? AND tm.userId = ? AND tm.status = 'active'
+                 AND p.action = 'role:delete'`,
+                [teamId, req.user.id]
+            );
+            if (memberRows.length === 0) {
+                return sendResponse(res, { status: 403, message: "You do not have 'role:delete' permission", data: null });
+            }
+
+            const myRoleId = memberRows[0].roleId;
+
+            // Target role must be under this member's role
+            if (roleRows[0].parentRoleId !== myRoleId) {
+                return sendResponse(res, {
+                    status: 403,
+                    message: 'You can only remove permissions from roles that are directly under your role',
+                    data: null,
+                });
+            }
+        }
+
+        // Find permission by action
+        const [permRows] = await db.execute(
+            `SELECT * FROM permissions WHERE action = ?`, [action]
+        );
+        if (permRows.length === 0) {
+            return sendResponse(res, { status: 404, message: `Permission '${action}' not found`, data: null });
         }
 
         const [result] = await db.execute(
             `DELETE FROM role_permissions WHERE roleId = ? AND permissionId = ?`,
-            [roleId, permissionId]
+            [roleRows[0].id, permRows[0].id]
         );
         if (result.affectedRows === 0) {
-            return sendResponse(res, { status: 404, message: 'Permission not found on this role', data: null });
+            return sendResponse(res, { status: 404, message: `Permission '${action}' is not assigned to role '${roleName}'`, data: null });
         }
 
         await Audit.logTeamAction(
-            teamId,
-            req.user.id,
-            'ROLE_PERMISSION_REMOVED',
-            { permissionId },
+            teamId, req.user.id, 'ROLE_PERMISSION_REMOVED',
+            { role: roleName, action },
             null
         );
 
-        return sendResponse(res, { status: 200, message: 'Permission removed from role successfully', data: null });
+        return sendResponse(res, { status: 200, message: `Permission '${action}' removed from '${roleName}' successfully`, data: null });
     } catch (err) {
         return sendResponse(res, { status: 500, message: err.message, data: null });
     }
@@ -524,8 +792,7 @@ teamRouter.delete('/teams/:teamId/roles/:roleId/permissions/:permissionId', User
  * /teams/{teamId}/members/invite:
  *   post:
  *     summary: Invite a user to the team by email
- *     description: Invites a user to the team and assigns them a role. Requires 'member:invite' permission. Currently, this is restricted to the team owner.
- *     tags: [Teams]
+ *     description: "Invites a user to the team, assigns them a role, and sends them an invitation email. Owner always has access. Members need the member:invite permission."
  *     security:
  *       - cookieAuth: []
  *     parameters:
@@ -534,6 +801,7 @@ teamRouter.delete('/teams/:teamId/roles/:roleId/permissions/:permissionId', User
  *         required: true
  *         schema:
  *           type: integer
+ *         description: ID of the team
  *     requestBody:
  *       required: true
  *       content:
@@ -550,17 +818,50 @@ teamRouter.delete('/teams/:teamId/roles/:roleId/permissions/:permissionId', User
  *                 example: 1
  *     responses:
  *       201:
- *         description: Member invited successfully
+ *         description: Member invited and email sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 status:
+ *                   type: integer
+ *                   example: 201
+ *                 message:
+ *                   type: string
+ *                   example: John Doe invited to the team successfully
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     teamId:
+ *                       type: integer
+ *                       example: 1
+ *                     user:
+ *                       type: object
+ *                       properties:
+ *                         id:
+ *                           type: integer
+ *                           example: 5
+ *                         emailId:
+ *                           type: string
+ *                           example: john@gmail.com
+ *                     roleId:
+ *                       type: integer
+ *                       example: 1
  *       400:
- *         description: Already a member or inviting yourself
+ *         description: emailId and roleId are required, already a member, or inviting yourself
+ *       401:
+ *         description: Unauthorized
  *       403:
- *         description: Forbidden. Only the team owner can invite members.
+ *         description: Only team owner can invite members
  *       404:
- *         description: User or role not found
+ *         description: User not found or role not found in this team
  *       500:
  *         description: Server error
  */
-teamRouter.post('/teams/:teamId/members/invite', UserAuth, PermissionAuth('member:invite'), async (req, res) => {    try {
+
+teamRouter.post('/teams/:teamId/members/invite', UserAuth, PermissionAuth('member:invite'), async (req, res) => {
+    try {
         const { teamId } = req.params;
         const { emailId, roleId } = req.body;
         const db = getDB();
@@ -606,6 +907,18 @@ teamRouter.post('/teams/:teamId/members/invite', UserAuth, PermissionAuth('membe
             `INSERT INTO team_members (teamId, userId, roleId, invitedBy, status) VALUES (?, ?, ?, ?, 'active')`,
             [teamId, targetUser.id, roleId, req.user.id]
         );
+
+        try {
+            await sendInviteEmail(
+                targetUser.emailId,
+                `${req.user.firstName} ${req.user.lastName}`,
+                teamRows[0].name,
+                roleRows[0].name
+            );
+        } catch (emailErr) {
+            console.error('Invite email failed to send:', emailErr);
+            // Don't block the invite — member is added even if email fails
+        }
 
         await Audit.logTeamAction(
             teamId,
@@ -773,7 +1086,7 @@ teamRouter.patch('/teams/:teamId/members/:userId/role', UserAuth, async (req, re
  * /teams/{teamId}/members/{userId}:
  *   delete:
  *     summary: Remove a member from the team
- *     description: Removes a member from the team. Requires 'member:remove' permission. Currently, this is restricted to the team owner.
+ *     description: "Owner always has access. Members need the member:remove permission."
  *     tags: [Teams]
  *     security:
  *       - cookieAuth: []
@@ -798,7 +1111,8 @@ teamRouter.patch('/teams/:teamId/members/:userId/role', UserAuth, async (req, re
  *       500:
  *         description: Server error
  */
-teamRouter.delete('/teams/:teamId/members/:userId', UserAuth, PermissionAuth('member:remove'), async (req, res) => {    try {
+teamRouter.delete('/teams/:teamId/members/:userId', UserAuth, PermissionAuth('member:remove'), async (req, res) => {
+    try {
         const { teamId, userId } = req.params;
         const db = getDB();
 
@@ -878,6 +1192,8 @@ teamRouter.get('/permissions', UserAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: Team audit logs fetched successfully
+ *       401:
+ *         description: Unauthorized
  *       403:
  *         description: Only team owner can view audit logs
  *       500:

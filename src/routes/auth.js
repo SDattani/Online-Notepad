@@ -113,7 +113,7 @@ authRouter.post('/signup', async (req, res) => {
  * /login:
  *   post:
  *     summary: Login user
- *     description: If 2FA is enabled OTP will be sent to console. Use POST /auth/verify-otp with your email and OTP to complete login. No tempToken needed anymore.
+ *     description: If 2FA is enabled, OTP will be sent to your email. Use POST /auth/verify-otp with your email and OTP to complete login.
  *     tags: [Auth]
  *     requestBody:
  *       required: true

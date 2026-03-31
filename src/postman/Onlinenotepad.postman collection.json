@@ -1,0 +1,487 @@
+{
+  "info": {
+    "_postman_id": "online-notepad-complete",
+    "name": "Online Notepad - Complete API",
+    "description": "Complete API collection for Online Notepad with Auth, Notes, Sharing, Teams, RBAC and Audit Logs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Sahil\",\n  \"lastName\": \"Dattani\",\n  \"emailId\": \"sahil@gmail.com\",\n  \"password\": \"Sah#2003\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/signup", "host": ["{{baseUrl}}"], "path": ["signup"] }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailId\": \"sahil@gmail.com\",\n  \"password\": \"Sah#2003\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/login", "host": ["{{baseUrl}}"], "path": ["login"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/logout", "host": ["{{baseUrl}}"], "path": ["logout"] }
+          }
+        },
+        {
+          "name": "Verify OTP (2FA)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailId\": \"sahil@gmail.com\",\n  \"otp\": \"123456\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/auth/verify-otp", "host": ["{{baseUrl}}"], "path": ["auth", "verify-otp"] }
+          }
+        },
+        {
+          "name": "Resend OTP",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailId\": \"sahil@gmail.com\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/auth/resend-otp", "host": ["{{baseUrl}}"], "path": ["auth", "resend-otp"] }
+          }
+        },
+        {
+          "name": "Cleanup Expired OTPs",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/auth/cleanup-otps", "host": ["{{baseUrl}}"], "path": ["auth", "cleanup-otps"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "User",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/user/view", "host": ["{{baseUrl}}"], "path": ["user", "view"] }
+          }
+        },
+        {
+          "name": "Update Password",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"oldPassword\": \"Sah#2003\",\n  \"newPassword\": \"Sah#2024\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/user/password", "host": ["{{baseUrl}}"], "path": ["user", "password"] }
+          }
+        },
+        {
+          "name": "Enable 2FA",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/user/2fa/enable", "host": ["{{baseUrl}}"], "path": ["user", "2fa", "enable"] }
+          }
+        },
+        {
+          "name": "Disable 2FA",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/user/2fa/disable", "host": ["{{baseUrl}}"], "path": ["user", "2fa", "disable"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Audit Logs",
+      "item": [
+        {
+          "name": "Get Account Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/audit-logs/account?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "audit-logs", "account"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        },
+        {
+          "name": "Get Notes Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/audit-logs/notes?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "audit-logs", "notes"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        },
+        {
+          "name": "Get Shared Notes Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/user/audit-logs/shared?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["user", "audit-logs", "shared"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notes",
+      "item": [
+        {
+          "name": "Create Note",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"My First Note\",\n  \"content\": \"This is the content of my note.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/notes", "host": ["{{baseUrl}}"], "path": ["notes"] }
+          }
+        },
+        {
+          "name": "Get All Notes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/notes", "host": ["{{baseUrl}}"], "path": ["notes"] }
+          }
+        },
+        {
+          "name": "Get Notes Shared With Me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/notes/shared-with-me", "host": ["{{baseUrl}}"], "path": ["notes", "shared-with-me"] }
+          }
+        },
+        {
+          "name": "Get Note By ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/notes/1", "host": ["{{baseUrl}}"], "path": ["notes", "1"] }
+          }
+        },
+        {
+          "name": "Update Note",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated Title\",\n  \"content\": \"Updated content here.\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/notes/1", "host": ["{{baseUrl}}"], "path": ["notes", "1"] }
+          }
+        },
+        {
+          "name": "Delete Note",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/notes/1", "host": ["{{baseUrl}}"], "path": ["notes", "1"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sharing",
+      "item": [
+        {
+          "name": "Share Note",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailId\": \"john@gmail.com\",\n  \"permission\": \"edit\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/notes/1/share", "host": ["{{baseUrl}}"], "path": ["notes", "1", "share"] }
+          }
+        },
+        {
+          "name": "Get All Shares For Note",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/notes/1/shares", "host": ["{{baseUrl}}"], "path": ["notes", "1", "shares"] }
+          }
+        },
+        {
+          "name": "Update Share Permission",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permission\": \"view\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/shared/YOUR_TOKEN_HERE/permission", "host": ["{{baseUrl}}"], "path": ["shared", "YOUR_TOKEN_HERE", "permission"] }
+          }
+        },
+        {
+          "name": "Revoke Share",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/shared/YOUR_TOKEN_HERE/revoke", "host": ["{{baseUrl}}"], "path": ["shared", "YOUR_TOKEN_HERE", "revoke"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teams",
+      "item": [
+        {
+          "name": "Create Team",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Company\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams", "host": ["{{baseUrl}}"], "path": ["teams"] }
+          }
+        },
+        {
+          "name": "Get All My Teams",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams", "host": ["{{baseUrl}}"], "path": ["teams"] }
+          }
+        },
+        {
+          "name": "Get Team Details",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams/1", "host": ["{{baseUrl}}"], "path": ["teams", "1"] }
+          }
+        },
+        {
+          "name": "Get Team Audit Logs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/1/audit-logs?limit=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["teams", "1", "audit-logs"],
+              "query": [{ "key": "limit", "value": "50" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Team Roles",
+      "item": [
+        {
+          "name": "Create Role (No Parent)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Manager\",\n  \"permissions\": [\n    \"note:create\",\n    \"note:edit\",\n    \"note:view\",\n    \"note:share\",\n    \"note:delete\",\n    \"role:assign\",\n    \"role:delete\",\n    \"member:invite\",\n    \"member:remove\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/roles", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles"] }
+          }
+        },
+        {
+          "name": "Create Role (With Parent)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Developer\",\n  \"parentRoleName\": \"Manager\",\n  \"permissions\": [\n    \"note:create\",\n    \"note:edit\",\n    \"note:view\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/roles", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles"] }
+          }
+        },
+        {
+          "name": "Create Role (Intern under Developer)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Intern\",\n  \"parentRoleName\": \"Developer\",\n  \"permissions\": [\n    \"note:view\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/roles", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles"] }
+          }
+        },
+        {
+          "name": "Get All Roles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams/1/roles", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles"] }
+          }
+        },
+        {
+          "name": "Delete Role",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams/1/roles/Intern", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles", "Intern"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Role Permissions",
+      "item": [
+        {
+          "name": "Add Permissions to Role (Owner)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"note:create\",\n    \"note:edit\",\n    \"note:view\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/roles/Developer/permissions", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles", "Developer", "permissions"] }
+          }
+        },
+        {
+          "name": "Add Permissions to Role (Manager delegating to Intern)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"permissions\": [\n    \"note:view\",\n    \"note:create\"\n  ]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/roles/Intern/permissions", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles", "Intern", "permissions"] }
+          }
+        },
+        {
+          "name": "Remove Permission from Role",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams/1/roles/Developer/permissions/note:share", "host": ["{{baseUrl}}"], "path": ["teams", "1", "roles", "Developer", "permissions", "note:share"] }
+          }
+        },
+        {
+          "name": "Get All Available Permissions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/permissions", "host": ["{{baseUrl}}"], "path": ["permissions"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Team Members",
+      "item": [
+        {
+          "name": "Invite Member",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"emailId\": \"john@gmail.com\",\n  \"roleId\": 1\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/members/invite", "host": ["{{baseUrl}}"], "path": ["teams", "1", "members", "invite"] }
+          }
+        },
+        {
+          "name": "Get All Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams/1/members", "host": ["{{baseUrl}}"], "path": ["teams", "1", "members"] }
+          }
+        },
+        {
+          "name": "Change Member Role",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roleId\": 2\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": { "raw": "{{baseUrl}}/teams/1/members/5/role", "host": ["{{baseUrl}}"], "path": ["teams", "1", "members", "5", "role"] }
+          }
+        },
+        {
+          "name": "Remove Member",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": { "raw": "{{baseUrl}}/teams/1/members/5", "host": ["{{baseUrl}}"], "path": ["teams", "1", "members", "5"] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -136,9 +136,11 @@ const connectDB = async () => {
         teamId INT NOT NULL,
         name VARCHAR(50) NOT NULL,
         createdBy INT NOT NULL,
+        parentRoleId INT DEFAULT NULL,
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (teamId) REFERENCES teams(id) ON DELETE CASCADE,
         FOREIGN KEY (createdBy) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (parentRoleId) REFERENCES team_roles(id) ON DELETE SET NULL,
         UNIQUE KEY unique_role_per_team (teamId, name)
     )
 `);

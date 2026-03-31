@@ -13,7 +13,6 @@ const PermissionAuth = (requiredPermission) => {
 
             const db = getDB();
 
-            // Team owner always has all permissions
             const [teamRows] = await db.execute(
                 `SELECT * FROM teams WHERE id = ? AND ownerId = ?`,
                 [teamId, userId]
@@ -22,7 +21,7 @@ const PermissionAuth = (requiredPermission) => {
             if (teamRows.length > 0) {
                 req.teamId = teamId;
                 req.isTeamOwner = true;
-                return next();
+                return next(); // owner always passes
             }
 
             // Check if active member has the required permission

@@ -29,4 +29,30 @@ const sendOTPEmail = async (toEmail, otp) => {
     await transporter.sendMail(mailOptions);
 };
 
-module.exports = { sendOTPEmail };
+const sendInviteEmail = async (toEmail, inviterName, teamName, roleName) => {
+    const mailOptions = {
+        from: `"Online Notepad" <${process.env.SMTP_USER}>`,
+        to: toEmail,
+        subject: `You've been invited to join ${teamName} on Online Notepad`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 480px; margin: auto; padding: 24px; border: 1px solid #e0e0e0; border-radius: 8px;">
+                <h2 style="color: #333;">You've been invited! 🎉</h2>
+                <p style="color: #555;">
+                    <strong>${inviterName}</strong> has invited you to join the team 
+                    <strong>${teamName}</strong> as a <strong>${roleName}</strong>.
+                </p>
+                <p style="color: #555;">Log in to your Online Notepad account to get started.</p>
+                <div style="text-align: center; margin: 32px 0;">
+                    <a href="${process.env.FRONTEND_URL}/login" 
+                       style="background-color: #4f46e5; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                        Go to Online Notepad
+                    </a>
+                </div>
+                <p style="color: #888; font-size: 13px;">If you did not expect this invitation, you can ignore this email.</p>
+            </div>
+        `,
+    };
+    await transporter.sendMail(mailOptions);
+};
+
+module.exports = { sendOTPEmail, sendInviteEmail };

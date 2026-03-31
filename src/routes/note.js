@@ -34,40 +34,20 @@ const Audit = require('../models/audit');
  *     responses:
  *       201:
  *         description: Note created successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 201
- *                 message:
- *                   type: string
- *                   example: Note created successfully
- *                 data:
- *                   type: object
- *                   properties:
- *                     id:
- *                       type: integer
- *                       example: 1
- *                     title:
- *                       type: string
- *                       example: My First Note
- *                     content:
- *                       type: string
- *                       example: This is my note content
- *                     userId:
- *                       type: integer
- *                       example: 1
- *                     createdAt:
- *                       type: string
- *                       example: 2026-03-18T00:00:00.000Z
- *                     updatedAt:
- *                       type: string
- *                       example: 2026-03-18T00:00:00.000Z
  *       400:
  *         description: Title is required or exceeds limit
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ *   get:
+ *     summary: Get all own notes and shared notes
+ *     tags: [Notes]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Notes fetched successfully
  *       401:
  *         description: Unauthorized
  *       500:
@@ -107,84 +87,6 @@ noteRouter.post('/notes', UserAuth, async (req, res) => {
         return sendResponse(res, { status: 500, message: err.message, data: null });
     }
 });
-
-/**
- * @swagger
- * /notes:
- *   get:
- *     summary: Get all own notes and shared notes
- *     tags: [Notes]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: Notes fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Notes fetched successfully
- *                 data:
- *                   type: object
- *                   properties:
- *                     ownNotes:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                             example: 1
- *                           title:
- *                             type: string
- *                             example: My First Note
- *                           content:
- *                             type: string
- *                             example: This is my note
- *                           userId:
- *                             type: integer
- *                             example: 1
- *                           role:
- *                             type: string
- *                             example: owner
- *                     sharedNotes:
- *                       type: array
- *                       items:
- *                         type: object
- *                         properties:
- *                           id:
- *                             type: integer
- *                             example: 2
- *                           title:
- *                             type: string
- *                             example: John's Note
- *                           role:
- *                             type: string
- *                             example: shared
- *                           permission:
- *                             type: string
- *                             enum: [view, edit]
- *                             example: edit
- *                           ownerFirstName:
- *                             type: string
- *                             example: John
- *                           ownerLastName:
- *                             type: string
- *                             example: Doe
- *                           shareLink:
- *                             type: string
- *                             example: http://localhost:5173/notes/2
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
 
 noteRouter.get('/notes', UserAuth, async (req, res) => {
     try {
