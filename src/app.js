@@ -23,6 +23,8 @@ app.use('/', noteRouter);
 app.use('/', sharedRouter);
 app.use('/', teamRouter);
 
+console.table();
+
 connectDB().then(async () => {
     console.log('Connected to Database successfully!');
     await seedPermissions();

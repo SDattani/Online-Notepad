@@ -1,12 +1,15 @@
 const express = require('express');
 const userRouter = express.Router();
-const bcrypt = require('bcrypt');
-const { getDB } = require("../config/database")
-
 const { UserAuth } = require('../middleware/Auth');
-const User = require('../models/user');
-const { sendResponse } = require('../utils/response');
-const Audit = require('../models/audit');
+const {
+    getProfile,
+    updatePassword,
+    enable2FA,
+    disable2FA,
+    getAccountAuditLogs,
+    getNoteAuditLogs,
+    getSharedAuditLogs,
+} = require('../controllers/userController');
 
 /**
  * @swagger
@@ -19,26 +22,6 @@ const Audit = require('../models/audit');
  *     responses:
  *       200:
  *         description: User profile fetched successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: User profile fetched successfully
- *                 data:
- *                   type: object
- *                   properties:
- *                     firstName:
- *                       type: string
- *                       example: Sahil
- *                     lastName:
- *                       type: string
- *                       example: Dattani
  *       401:
  *         description: Unauthorized
  *       404:
@@ -46,36 +29,7 @@ const Audit = require('../models/audit');
  *       500:
  *         description: Server error
  */
-
-userRouter.get("/user/view", UserAuth, async (req, res) => {
-    try {
-        const db = getDB();
-        const [rows] = await db.execute(
-            'SELECT firstName, lastName FROM users WHERE id = ?',
-            [req.user.id]
-        );
-
-        if (rows.length === 0) {
-            return sendResponse(res, {
-                status: 404,
-                message: 'User not found',
-                data: null,
-            });
-        }
-
-        return sendResponse(res, {
-            status: 200,
-            message: 'User profile fetched successfully',
-            data: rows[0],
-        });
-    } catch (err) {
-        return sendResponse(res, {
-            status: 500,
-            message: err.message,
-            data: null,
-        });
-    }
-});
+userRouter.get('/user/view', UserAuth, getProfile);
 
 /**
  * @swagger
@@ -102,20 +56,6 @@ userRouter.get("/user/view", UserAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: Password updated successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: Sahil your password updated successfully
- *                 data:
- *                   nullable: true
- *                   example: null
  *       400:
  *         description: Old and new password are required
  *       401:
@@ -123,51 +63,7 @@ userRouter.get("/user/view", UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-
-userRouter.patch("/user/password", UserAuth, async (req, res) => {
-    try {
-        const { oldPassword, newPassword } = req.body;
-
-        if (!oldPassword || !newPassword) {
-            return sendResponse(res, {
-                status: 400,
-                message: 'Old password and new password are required',
-                data: null,
-            });
-        }
-
-        const isOldPasswordValid = await User.validatePassword(oldPassword, req.user.password);
-        if (!isOldPasswordValid) {
-            return sendResponse(res, {
-                status: 401,
-                message: 'Invalid old password',
-                data: null,
-            });
-        }
-
-        const newPasswordHash = await bcrypt.hash(newPassword, 10);
-        await User.updatePassword(req.user.id, newPasswordHash);
-
-        await Audit.logUserAction(
-            req.user.id,
-            'PASSWORD_UPDATED',
-            { passwordHash: req.user.password },
-            { passwordHash: newPasswordHash }
-        );
-
-        return sendResponse(res, {
-            status: 200,
-            message: `${req.user.firstName} your password updated successfully`,
-            data: null,
-        });
-    } catch (err) {
-        return sendResponse(res, {
-            status: 500,
-            message: err.message,
-            data: null,
-        });
-    }
-});
+userRouter.patch('/user/password', UserAuth, updatePassword);
 
 /**
  * @swagger
@@ -181,20 +77,6 @@ userRouter.patch("/user/password", UserAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: 2FA enabled successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: 2FA enabled successfully. OTP will be required on next login.
- *                 data:
- *                   nullable: true
- *                   example: null
  *       400:
  *         description: 2FA is already enabled
  *       401:
@@ -202,39 +84,7 @@ userRouter.patch("/user/password", UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-
-userRouter.patch('/user/2fa/enable', UserAuth, async (req, res) => {
-    try {
-        if (req.user.isTwoFactorEnabled) {
-            return sendResponse(res, {
-                status: 400,
-                message: '2FA is already enabled',
-                data: null,
-            });
-        }
-
-        await User.enableTwoFactor(req.user.id);
-
-        await Audit.logUserAction(
-            req.user.id,
-            '2FA_ENABLED',
-            { isTwoFactorEnabled: false },
-            { isTwoFactorEnabled: true }
-        );
-
-        return sendResponse(res, {
-            status: 200,
-            message: '2FA enabled successfully. OTP will be required on next login.',
-            data: null,
-        });
-    } catch (err) {
-        return sendResponse(res, {
-            status: 500,
-            message: err.message,
-            data: null,
-        });
-    }
-});
+userRouter.patch('/user/2fa/enable', UserAuth, enable2FA);
 
 /**
  * @swagger
@@ -248,20 +98,6 @@ userRouter.patch('/user/2fa/enable', UserAuth, async (req, res) => {
  *     responses:
  *       200:
  *         description: 2FA disabled successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 status:
- *                   type: integer
- *                   example: 200
- *                 message:
- *                   type: string
- *                   example: 2FA disabled successfully
- *                 data:
- *                   nullable: true
- *                   example: null
  *       400:
  *         description: 2FA is already disabled
  *       401:
@@ -269,39 +105,7 @@ userRouter.patch('/user/2fa/enable', UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-
-userRouter.patch('/user/2fa/disable', UserAuth, async (req, res) => {
-    try {
-        if (!req.user.isTwoFactorEnabled) {
-            return sendResponse(res, {
-                status: 400,
-                message: '2FA is already disabled',
-                data: null,
-            });
-        }
-
-        await User.disableTwoFactor(req.user.id);
-
-        await Audit.logUserAction(
-            req.user.id,
-            '2FA_DISABLED',
-            { isTwoFactorEnabled: true },
-            { isTwoFactorEnabled: false }
-        );
-
-        return sendResponse(res, {
-            status: 200,
-            message: '2FA disabled successfully',
-            data: null,
-        });
-    } catch (err) {
-        return sendResponse(res, {
-            status: 500,
-            message: err.message,
-            data: null,
-        });
-    }
-});
+userRouter.patch('/user/2fa/disable', UserAuth, disable2FA);
 
 /**
  * @swagger
@@ -318,7 +122,6 @@ userRouter.patch('/user/2fa/disable', UserAuth, async (req, res) => {
  *         schema:
  *           type: integer
  *           example: 50
- *         description: Max number of records to return (default 50, max 100)
  *     responses:
  *       200:
  *         description: Account audit logs fetched
@@ -327,20 +130,7 @@ userRouter.patch('/user/2fa/disable', UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-
-userRouter.get('/user/audit-logs/account', UserAuth, async (req, res) => {
-    try {
-        const db = getDB();
-        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-        const [logs] = await db.execute(
-            `SELECT * FROM user_audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ${limit}`,
-            [req.user.id]
-        );
-        return sendResponse(res, { status: 200, message: 'Account audit logs fetched', data: logs });
-    } catch (err) {
-        return sendResponse(res, { status: 500, message: err.message, data: null });
-    }
-});
+userRouter.get('/user/audit-logs/account', UserAuth, getAccountAuditLogs);
 
 /**
  * @swagger
@@ -357,7 +147,6 @@ userRouter.get('/user/audit-logs/account', UserAuth, async (req, res) => {
  *         schema:
  *           type: integer
  *           example: 50
- *         description: Max number of records to return (default 50, max 100)
  *     responses:
  *       200:
  *         description: Note audit logs fetched
@@ -366,20 +155,7 @@ userRouter.get('/user/audit-logs/account', UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-
-userRouter.get('/user/audit-logs/notes', UserAuth, async (req, res) => {
-    try {
-        const db = getDB();
-        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-        const [logs] = await db.execute(
-            `SELECT * FROM note_audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ${limit}`,
-            [req.user.id]
-        );
-        return sendResponse(res, { status: 200, message: 'Note audit logs fetched', data: logs });
-    } catch (err) {
-        return sendResponse(res, { status: 500, message: err.message, data: null });
-    }
-});
+userRouter.get('/user/audit-logs/notes', UserAuth, getNoteAuditLogs);
 
 /**
  * @swagger
@@ -396,7 +172,6 @@ userRouter.get('/user/audit-logs/notes', UserAuth, async (req, res) => {
  *         schema:
  *           type: integer
  *           example: 50
- *         description: Max number of records to return (default 50, max 100)
  *     responses:
  *       200:
  *         description: Shared note audit logs fetched
@@ -405,19 +180,6 @@ userRouter.get('/user/audit-logs/notes', UserAuth, async (req, res) => {
  *       500:
  *         description: Server error
  */
-
-userRouter.get('/user/audit-logs/shared', UserAuth, async (req, res) => {
-    try {
-        const db = getDB();
-        const limit = Math.min(parseInt(req.query.limit) || 50, 100);
-        const [logs] = await db.execute(
-            `SELECT * FROM shared_note_audit_log WHERE userId = ? ORDER BY createdAt DESC LIMIT ${limit}`,
-            [req.user.id]
-        );
-        return sendResponse(res, { status: 200, message: 'Shared note audit logs fetched', data: logs });
-    } catch (err) {
-        return sendResponse(res, { status: 500, message: err.message, data: null });
-    }
-});
+userRouter.get('/user/audit-logs/shared', UserAuth, getSharedAuditLogs);
 
 module.exports = userRouter;
