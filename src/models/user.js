@@ -37,8 +37,14 @@ const User = {
         );
     },
 
-    generateToken: (user) => {
+    generateAccessToken: (user) => {
         return jwt.sign({ _id: user.id }, process.env.JWT_SECRET, {
+            expiresIn: '15m'
+        });
+    },
+
+    generateRefreshToken: (user) => {
+        return jwt.sign({ _id: user.id }, process.env.JWT_REFRESH_SECRET, {
             expiresIn: '7d'
         });
     },

@@ -30,7 +30,7 @@ const { shareNote, getSharesForNote, updateSharePermission, revokeShare } = requ
 
 /**
  * @swagger
- * /notes/{id}/share:
+ * /api/v1/notes/{id}/share:
  *   post:
  *     summary: Share a note with a specific user by email
  *     description: Owner shares note by email. Permission is view or edit.
@@ -61,11 +61,11 @@ const { shareNote, getSharesForNote, updateSharePermission, revokeShare } = requ
  *       500:
  *         description: Server error
  */
-sharedRouter.post('/notes/:id/share', UserAuth, shareNote);
+sharedRouter.post('/api/v1/notes/:id/share', UserAuth, shareNote);
 
 /**
  * @swagger
- * /notes/{id}/shares:
+ * /api/v1/notes/{id}/shares:
  *   get:
  *     summary: Get all share links for a note (owner only)
  *     tags: [Sharing]
@@ -87,7 +87,7 @@ sharedRouter.post('/notes/:id/share', UserAuth, shareNote);
  *       500:
  *         description: Server error
  */
-sharedRouter.get('/notes/:id/shares', UserAuth, getSharesForNote);
+sharedRouter.get('/api/v1/notes/:id/shares', UserAuth, getSharesForNote);
 
 /**
  * @swagger
@@ -122,11 +122,11 @@ sharedRouter.get('/notes/:id/shares', UserAuth, getSharesForNote);
  *       500:
  *         description: Server error
  */
-sharedRouter.patch('/shared/:token/permission', UserAuth, updateSharePermission);
+sharedRouter.patch('/api/v1/shared/:token/permission', UserAuth, updateSharePermission);
 
 /**
  * @swagger
- * /shared/{token}/revoke:
+ * /api/v1/shared/{token}/revoke:
  *   delete:
  *     summary: Revoke a share link (owner only)
  *     description: Once revoked the shared user can no longer access the note.
@@ -149,6 +149,6 @@ sharedRouter.patch('/shared/:token/permission', UserAuth, updateSharePermission)
  *       500:
  *         description: Server error
  */
-sharedRouter.delete('/shared/:token/revoke', UserAuth, revokeShare);
+sharedRouter.delete('/api/v1/shared/:token/revoke', UserAuth, revokeShare);
 
 module.exports = sharedRouter;

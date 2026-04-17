@@ -1,6 +1,7 @@
 const express = require('express');
 const userRouter = express.Router();
 const { UserAuth } = require('../middleware/Auth');
+const {logout, cleanupOTPs} = require('../controllers/authController');
 const {
     getProfile,
     updatePassword,
@@ -11,9 +12,46 @@ const {
     getSharedAuditLogs,
 } = require('../controllers/userController');
 
+userRouter.use(UserAuth);
+
 /**
  * @swagger
- * /user/view:
+ * /api/v1/logout:
+ *   post:
+ *     summary: Logout user
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *       401:
+ *         description: Unauthorized
+ */
+userRouter.post('/api/v1/logout', logout);
+
+/**
+ * @swagger
+ * /api/v1/auth/cleanup-otps:
+ *   delete:
+ *     summary: Manually clean up expired and used OTPs
+ *     description: Deletes all OTPs where expiresAt is past or isUsed is true.
+ *     tags: [Auth]
+ *     security:
+ *       - cookieAuth: []
+ *     responses:
+ *       200:
+ *         description: OTPs cleaned up successfully
+ *       401:
+ *         description: Unauthorized
+ *       500:
+ *         description: Server error
+ */
+userRouter.delete('/api/v1/auth/cleanup-otps', cleanupOTPs);
+
+/**
+ * @swagger
+ * /api/v1/user/view:
  *   get:
  *     summary: Get logged-in user profile
  *     tags: [User]
@@ -29,11 +67,11 @@ const {
  *       500:
  *         description: Server error
  */
-userRouter.get('/user/view', UserAuth, getProfile);
+userRouter.get('/api/v1/user/view', getProfile);
 
 /**
  * @swagger
- * /user/password:
+ * /api/v1/user/password:
  *   patch:
  *     summary: Update password
  *     tags: [User]
@@ -63,11 +101,11 @@ userRouter.get('/user/view', UserAuth, getProfile);
  *       500:
  *         description: Server error
  */
-userRouter.patch('/user/password', UserAuth, updatePassword);
+userRouter.patch('/api/v1/user/password', updatePassword);
 
 /**
  * @swagger
- * /user/2fa/enable:
+ * /api/v1/user/2fa/enable:
  *   patch:
  *     summary: Enable 2FA for logged-in user
  *     description: Once enabled OTP will be required on every login.
@@ -84,11 +122,11 @@ userRouter.patch('/user/password', UserAuth, updatePassword);
  *       500:
  *         description: Server error
  */
-userRouter.patch('/user/2fa/enable', UserAuth, enable2FA);
+userRouter.patch('/api/v1/user/2fa/enable', enable2FA);
 
 /**
  * @swagger
- * /user/2fa/disable:
+ * /api/v1/user/2fa/disable:
  *   patch:
  *     summary: Disable 2FA for logged-in user
  *     description: Once disabled OTP will no longer be required on login.
@@ -105,11 +143,11 @@ userRouter.patch('/user/2fa/enable', UserAuth, enable2FA);
  *       500:
  *         description: Server error
  */
-userRouter.patch('/user/2fa/disable', UserAuth, disable2FA);
+userRouter.patch('/api/v1/user/2fa/disable',  disable2FA);
 
 /**
  * @swagger
- * /user/audit-logs/account:
+ * /api/v1/user/audit-logs/account:
  *   get:
  *     summary: Get account activity audit logs
  *     description: Returns login, logout, signup, password change, and 2FA activity. Use ?limit=N to control results (max 100).
@@ -130,11 +168,11 @@ userRouter.patch('/user/2fa/disable', UserAuth, disable2FA);
  *       500:
  *         description: Server error
  */
-userRouter.get('/user/audit-logs/account', UserAuth, getAccountAuditLogs);
+userRouter.get('/api/v1/user/audit-logs/account', getAccountAuditLogs);
 
 /**
  * @swagger
- * /user/audit-logs/notes:
+ * /api/v1/user/audit-logs/notes:
  *   get:
  *     summary: Get note activity audit logs
  *     description: Returns created, updated, and deleted note history. Use ?limit=N to control results (max 100).
@@ -155,11 +193,11 @@ userRouter.get('/user/audit-logs/account', UserAuth, getAccountAuditLogs);
  *       500:
  *         description: Server error
  */
-userRouter.get('/user/audit-logs/notes', UserAuth, getNoteAuditLogs);
+userRouter.get('/api/v1/user/audit-logs/notes', getNoteAuditLogs);
 
 /**
  * @swagger
- * /user/audit-logs/shared:
+ * /api/v1/user/audit-logs/shared:
  *   get:
  *     summary: Get shared note activity audit logs
  *     description: Returns share, revoke, and permission change history. Use ?limit=N to control results (max 100).
@@ -180,6 +218,6 @@ userRouter.get('/user/audit-logs/notes', UserAuth, getNoteAuditLogs);
  *       500:
  *         description: Server error
  */
-userRouter.get('/user/audit-logs/shared', UserAuth, getSharedAuditLogs);
+userRouter.get('/api/v1/user/audit-logs/shared', getSharedAuditLogs);
 
 module.exports = userRouter;

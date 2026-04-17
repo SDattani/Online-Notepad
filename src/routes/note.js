@@ -2,10 +2,10 @@ const express = require('express');
 const noteRouter = express.Router();
 const { UserAuth } = require('../middleware/Auth');
 const { createNote, getAllNotes, getSharedWithMe, getNoteById, updateNote, deleteNote } = require('../controllers/noteController');
-
+noteRouter.use(UserAuth);
 /**
  * @swagger
- * /notes:
+ * /api/v1/notes:
  *   post:
  *     summary: Create a new note
  *     tags: [Notes]
@@ -47,12 +47,12 @@ const { createNote, getAllNotes, getSharedWithMe, getNoteById, updateNote, delet
  *       500:
  *         description: Server error
  */
-noteRouter.post('/notes', UserAuth, createNote);
-noteRouter.get('/notes', UserAuth, getAllNotes);
+noteRouter.post('/api/v1/notes', UserAuth, createNote);
+noteRouter.get('/api/v1/notes', UserAuth, getAllNotes);
 
 /**
  * @swagger
- * /notes/shared-with-me:
+ * /api/v1/notes/shared-with-me:
  *   get:
  *     summary: Get all notes shared with the logged-in user
  *     tags: [Notes]
@@ -66,11 +66,11 @@ noteRouter.get('/notes', UserAuth, getAllNotes);
  *       500:
  *         description: Server error
  */
-noteRouter.get('/notes/shared-with-me', UserAuth, getSharedWithMe);
+noteRouter.get('/api/v1/notes/shared-with-me', UserAuth, getSharedWithMe);
 
 /**
  * @swagger
- * /notes/{id}:
+ * /api/v1/notes/{id}:
  *   get:
  *     summary: Get a note by ID
  *     description: Owner gets full access. Shared user gets note based on their permission level.
@@ -146,8 +146,8 @@ noteRouter.get('/notes/shared-with-me', UserAuth, getSharedWithMe);
  *       404:
  *         description: Note not found
  */
-noteRouter.get('/notes/:id', UserAuth, getNoteById);
-noteRouter.patch('/notes/:id', UserAuth, updateNote);
-noteRouter.delete('/notes/:id', UserAuth, deleteNote);
+noteRouter.get('/api/v1/notes/:id', UserAuth, getNoteById);
+noteRouter.patch('/api/v1/notes/:id', UserAuth, updateNote);
+noteRouter.delete('/api/v1/notes/:id', UserAuth, deleteNote);
 
 module.exports = noteRouter;

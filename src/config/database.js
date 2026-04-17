@@ -55,17 +55,9 @@ const connectDB = async () => {
         )
     `);
 
-    await db.execute(`
-    CREATE TABLE IF NOT EXISTS otps (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        userId INT NOT NULL,
-        otp VARCHAR(6) NOT NULL,
-        expiresAt TIMESTAMP NOT NULL,
-        isUsed BOOLEAN DEFAULT FALSE,
-        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
-        )
-    `);
+    // Drop the legacy otps table if it exists
+    await db.execute('DROP TABLE IF EXISTS otps');
+
     await db.execute(`
         CREATE TABLE IF NOT EXISTS user_audit_log (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -186,6 +178,19 @@ const connectDB = async () => {
         FOREIGN KEY (performedBy) REFERENCES users(id) ON DELETE SET NULL,
         INDEX idx_team_audit (teamId),
         INDEX idx_team_audit_user (performedBy)
+    )
+`);
+
+    await db.execute(`
+    CREATE TABLE IF NOT EXISTS refresh_tokens (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        userId INT NOT NULL,
+        token VARCHAR(255) NOT NULL UNIQUE,
+        expiresAt TIMESTAMP NOT NULL,
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_refresh_token (token),
+        INDEX idx_refresh_user (userId)
     )
 `);
 

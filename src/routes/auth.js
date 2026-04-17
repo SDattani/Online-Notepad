@@ -1,11 +1,22 @@
 const express = require('express');
 const authRouter = express.Router();
-const { UserAuth } = require('../middleware/Auth');
-const { signup, login, logout, verifyOTP, resendOTP, cleanupOTPs } = require('../controllers/authController');
+const rateLimit = require('express-rate-limit');
+const { signup, login, verifyOTP, resendOTP, refreshToken } = require('../controllers/authController');
+
+// Rate Limiter for Login & OTP generation (Max 5 requests per 15 minutes)
+const otpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 5,
+    message: {
+        status: 429,
+        message: "Too many requests from this IP, please try again after 15 minutes",
+        data: null
+    }
+});
 
 /**
  * @swagger
- * /signup:
+ * /api/v1/signup:
  *   post:
  *     summary: Register a new user
  *     tags: [Auth]
@@ -35,14 +46,14 @@ const { signup, login, logout, verifyOTP, resendOTP, cleanupOTPs } = require('..
  *       400:
  *         description: Validation error or email already registered
  */
-authRouter.post('/signup', signup);
+authRouter.post('/api/v1/signup', signup);
 
 /**
  * @swagger
- * /login:
+ * /api/v1/login:
  *   post:
  *     summary: Login user
- *     description: If 2FA is enabled, OTP will be sent to your email. Use POST /auth/verify-otp to complete login.
+ *     description: If 2FA is enabled, OTP will be sent to your email. Use POST /api/v1/auth/verify-otp to complete login.
  *     tags: [Auth]
  *     requestBody:
  *       required: true
@@ -70,27 +81,11 @@ authRouter.post('/signup', signup);
  *       500:
  *         description: Server error
  */
-authRouter.post('/login', login);
+authRouter.post('/api/v1/login', otpLimiter, login);
 
 /**
  * @swagger
- * /logout:
- *   post:
- *     summary: Logout user
- *     tags: [Auth]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: Logged out successfully
- *       401:
- *         description: Unauthorized
- */
-authRouter.post('/logout', UserAuth, logout);
-
-/**
- * @swagger
- * /auth/verify-otp:
+ * /api/v1/auth/verify-otp:
  *   post:
  *     summary: Verify 2FA OTP to complete login
  *     tags: [Auth]
@@ -100,11 +95,8 @@ authRouter.post('/logout', UserAuth, logout);
  *         application/json:
  *           schema:
  *             type: object
- *             required: [emailId, otp]
+ *             required: [otp]
  *             properties:
- *               emailId:
- *                 type: string
- *                 example: sahil@gmail.com
  *               otp:
  *                 type: string
  *                 example: "123456"
@@ -112,62 +104,49 @@ authRouter.post('/logout', UserAuth, logout);
  *       200:
  *         description: OTP verified, login complete
  *       400:
- *         description: emailId and otp are required
+ *         description: OTP is required
  *       401:
- *         description: Invalid or expired OTP
+ *         description: Invalid or expired OTP / Session Expired
  *       404:
  *         description: User not found
  *       500:
  *         description: Server error
  */
-authRouter.post('/auth/verify-otp', verifyOTP);
+authRouter.post('/api/v1/auth/verify-otp', otpLimiter, verifyOTP);
 
 /**
  * @swagger
- * /auth/resend-otp:
+ * /api/v1/auth/resend-otp:
  *   post:
  *     summary: Resend 2FA OTP to email
  *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [emailId]
- *             properties:
- *               emailId:
- *                 type: string
- *                 example: sahil@gmail.com
  *     responses:
  *       200:
  *         description: OTP resent successfully
- *       400:
- *         description: Invalid email or 2FA not enabled
+ *       401:
+ *         description: Session Expired
+ *       500:
+ *         description: Server error
+ */
+authRouter.post('/api/v1/auth/resend-otp', otpLimiter, resendOTP);
+
+/**
+ * @swagger
+ * /api/v1/auth/refresh:
+ *   post:
+ *     summary: Refresh access token using refresh token cookie
+ *     description: Issues a new access token (and rotates the refresh token) if the refresh token cookie is valid.
+ *     tags: [Auth]
+ *     responses:
+ *       200:
+ *         description: Token refreshed successfully
+ *       401:
+ *         description: No refresh token, or invalid/revoked/expired
  *       404:
  *         description: User not found
  *       500:
  *         description: Server error
  */
-authRouter.post('/auth/resend-otp', resendOTP);
-
-/**
- * @swagger
- * /auth/cleanup-otps:
- *   delete:
- *     summary: Manually clean up expired and used OTPs
- *     description: Deletes all OTPs where expiresAt is past or isUsed is true.
- *     tags: [Auth]
- *     security:
- *       - cookieAuth: []
- *     responses:
- *       200:
- *         description: OTPs cleaned up successfully
- *       401:
- *         description: Unauthorized
- *       500:
- *         description: Server error
- */
-authRouter.delete('/auth/cleanup-otps', UserAuth, cleanupOTPs);
+authRouter.post('/api/v1/auth/refresh', refreshToken);
 
 module.exports = authRouter;
