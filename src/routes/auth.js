@@ -47,7 +47,15 @@ const otpLimiter = rateLimit({
  *         description: Validation error or email already registered
  */
 
-const signupLimiter = rateLimit({ windowMs: 60*60*1000, max: 10 });
+const signupLimiter = rateLimit({ 
+    windowMs: 60*60*1000, 
+    max: 10 , 
+    message: {
+        status: 429,
+        message: "Too many requests from this IP, please try again after an Hour",
+        data: null
+    }
+});
 authRouter.post('/api/v1/signup', signupLimiter, signup); // was: no limiter
 
 /**
@@ -133,7 +141,15 @@ authRouter.post('/api/v1/auth/verify-otp', otpLimiter, verifyOTP);
  *         description: Server error
  */
 
-const resendLimiter = rateLimit({ windowMs: 60*1000, max: 3 });
+const resendLimiter = rateLimit({ 
+    windowMs: 5*60*1000, 
+    max: 3,
+    message: {
+        status: 429,
+        message: "Too many requests from this IP, please try again after 5 Minutes",
+        data: null
+    }
+});
 authRouter.post('/api/v1/auth/resend-otp', resendLimiter, resendOTP); // was: otpLimiter
 
 /**
