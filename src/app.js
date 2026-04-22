@@ -13,6 +13,9 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.use(express.json());
 app.use(cookieParser());
 
+// Trust the first reverse proxy to ensure rate limiters get the correct client IP
+app.set('trust proxy', 1);
+
 app.use('/', routes);
 app.use((req, res) => {
     res.status(404).json({
@@ -21,16 +24,15 @@ app.use((req, res) => {
         data: null
     });
 });
-// app.use("*", (err, req, res) => {
-//     console.error("Unhandled error:", err);
-//     res.status(500).json({
-//         status: 500,
-//         message: "An internal server error occurred.",
-//         data: null
-//     });
-// });
 
-// console.table();
+app.use((err, req, res, next) => {
+    console.error("Unhandled error:", err);
+    res.status(500).json({ 
+        status: 500, 
+        message: "An internal server error occurred.", 
+        data: null 
+    });
+});
 
 connectDB().then(async () => {
     console.log('Connected to Database successfully!');

@@ -76,6 +76,8 @@ const login = async (req, res) => {
             // Store the state in a cookie so the frontend doesn't have to send it back!
             res.cookie('pending2FA', tempToken, {
                 httpOnly: true,
+                secure: process.env.NODE_ENV === 'production',
+                sameSite: 'strict',
                 expires: new Date(expiresAt)
             });
 
@@ -146,7 +148,7 @@ const verifyOTP = async (req, res) => {
 
         const dataToHash = `${emailId.toLowerCase()}.${otp}.${expiresAt}`;
         const calculatedHash = crypto.createHmac('sha256', process.env.JWT_SECRET).update(dataToHash).digest('hex');
-        
+
         if (calculatedHash !== hash) {
             return sendResponse(res, { status: 401, message: 'Invalid or expired OTP', data: null });
         }
@@ -187,7 +189,7 @@ const resendOTP = async (req, res) => {
 
         const { emailId } = decoded;
         const user = await User.findByEmail(emailId);
-        
+
         if (!user || !user.isTwoFactorEnabled) {
             return sendResponse(res, { status: 400, message: 'Invalid request', data: null });
         }
@@ -206,15 +208,17 @@ const resendOTP = async (req, res) => {
 
         res.cookie('pending2FA', tempToken, {
             httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
             expires: new Date(expiresAt)
         });
 
         await sendOTPEmail(user.emailId, otp);
 
-        return sendResponse(res, { 
-            status: 200, 
-            message: 'OTP resent to your email successfully', 
-            data: null 
+        return sendResponse(res, {
+            status: 200,
+            message: 'OTP resent to your email successfully',
+            data: null
         });
     } catch (err) {
         return sendResponse(res, { status: 500, message: err.message, data: null });
@@ -243,10 +247,14 @@ const issueTokens = async (res, user) => {
 
     res.cookie('token', accessToken, {
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
         expires: new Date(Date.now() + 15 * 60 * 1000) // 15 minutes
     });
     res.cookie('refreshToken', refreshToken, {
         httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
         expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
     });
 };

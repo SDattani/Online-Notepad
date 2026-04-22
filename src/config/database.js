@@ -55,9 +55,6 @@ const connectDB = async () => {
         )
     `);
 
-    // Drop the legacy otps table if it exists
-    await db.execute('DROP TABLE IF EXISTS otps');
-
     await db.execute(`
         CREATE TABLE IF NOT EXISTS user_audit_log (
             id INT AUTO_INCREMENT PRIMARY KEY,

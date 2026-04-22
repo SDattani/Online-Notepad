@@ -46,7 +46,9 @@ const otpLimiter = rateLimit({
  *       400:
  *         description: Validation error or email already registered
  */
-authRouter.post('/api/v1/signup', signup);
+
+const signupLimiter = rateLimit({ windowMs: 60*60*1000, max: 10 });
+authRouter.post('/api/v1/signup', signupLimiter, signup); // was: no limiter
 
 /**
  * @swagger
@@ -81,6 +83,7 @@ authRouter.post('/api/v1/signup', signup);
  *       500:
  *         description: Server error
  */
+
 authRouter.post('/api/v1/login', otpLimiter, login);
 
 /**
@@ -112,6 +115,7 @@ authRouter.post('/api/v1/login', otpLimiter, login);
  *       500:
  *         description: Server error
  */
+
 authRouter.post('/api/v1/auth/verify-otp', otpLimiter, verifyOTP);
 
 /**
@@ -128,7 +132,9 @@ authRouter.post('/api/v1/auth/verify-otp', otpLimiter, verifyOTP);
  *       500:
  *         description: Server error
  */
-authRouter.post('/api/v1/auth/resend-otp', otpLimiter, resendOTP);
+
+const resendLimiter = rateLimit({ windowMs: 60*1000, max: 3 });
+authRouter.post('/api/v1/auth/resend-otp', resendLimiter, resendOTP); // was: otpLimiter
 
 /**
  * @swagger
@@ -147,6 +153,7 @@ authRouter.post('/api/v1/auth/resend-otp', otpLimiter, resendOTP);
  *       500:
  *         description: Server error
  */
+
 authRouter.post('/api/v1/auth/refresh', refreshToken);
 
 module.exports = authRouter;
