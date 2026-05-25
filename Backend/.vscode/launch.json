@@ -12,7 +12,8 @@
             "skipFiles": [
                 "<node_internals>/**"
             ],
-            "program": "${workspaceFolder}\\src\\routes\\auth.js"
+            "program": "${workspaceFolder}\\src\\app.js",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

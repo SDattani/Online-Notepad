@@ -91,7 +91,7 @@ sharedRouter.get('/api/v1/notes/:id/shares', UserAuth, getSharesForNote);
 
 /**
  * @swagger
- * /shared/{token}/permission:
+ * /api/v1/shared/{token}/permission:
  *   patch:
  *     summary: Update permission of a share link (owner only)
  *     description: Switch permission between view and edit at any time.

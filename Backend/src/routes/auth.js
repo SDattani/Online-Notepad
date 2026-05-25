@@ -3,16 +3,6 @@ const authRouter = express.Router();
 const rateLimit = require('express-rate-limit');
 const { signup, login, verifyOTP, resendOTP, refreshToken } = require('../controllers/authController');
 
-// Rate Limiter for Login & OTP generation (Max 5 requests per 15 minutes)
-const otpLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 5,
-    message: {
-        status: 429,
-        message: "Too many requests from this IP, please try again after 15 minutes",
-        data: null
-    }
-});
 
 /**
  * @swagger
@@ -91,6 +81,17 @@ authRouter.post('/api/v1/signup', signupLimiter, signup); // was: no limiter
  *       500:
  *         description: Server error
  */
+
+// Rate Limiter for Login & OTP generation (Max 5 requests per 15 minutes)
+const otpLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, 
+    max: 5,
+    message: {
+        status: 429,
+        message: "Too many requests from this IP, please try again after 15 minutes",
+        data: null
+    }
+});
 
 authRouter.post('/api/v1/login', otpLimiter, login);
 

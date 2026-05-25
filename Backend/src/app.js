@@ -1,5 +1,7 @@
-require('dotenv').config();
 const express = require('express');
+const path = require('path');
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+
 const app = express();
 const swaggerUi = require("swagger-ui-express");
 const swaggerSpec = require ("./docs/swagger.config.js");
@@ -35,10 +37,11 @@ app.use((err, req, res, next) => {
 });
 
 connectDB().then(async () => {
+    const port = process.env.PORT || 3000;
     console.log('Connected to Database successfully!');
     await seedPermissions();
-    app.listen(3000, () =>{
-        console.log('Server is Running on port 3000');
+    app.listen(port, () =>{
+        console.log(`Server is Running on port ${port}`);
     });
 }).catch((err) => {
     console.log('Error Connecting to Database:', err);
