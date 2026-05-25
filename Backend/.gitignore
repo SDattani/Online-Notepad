@@ -3,3 +3,4 @@ node_modules
 pass.txt
 src.zip
 OnlineNotepad.drawio
+*.sql
